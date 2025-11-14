@@ -1,0 +1,135 @@
+{
+  "name": "noxtiz-pos",
+  "version": "1.0.0",
+  "description": "Multi User POS System - Futuristik Culinary Lab",
+  "main": "dist-electron/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build:electron && concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
+    "dev:vite": "vite",
+    "dev:electron": "wait-on http://localhost:5173 && electron .",
+    "build:electron": "tsc -p electron/tsconfig.json",
+    "build": "npm run build:electron && vite build && electron-builder",
+    "build:win": "npm run build:electron && vite build && electron-builder --win",
+    "build:mac": "npm run build:electron && vite build && electron-builder --mac",
+    "build:linux": "npm run build:electron && vite build && electron-builder --linux",
+    "build:android": "npm run build:electron && vite build && npm run build:android:clean && npm run build:android:capacitor",
+    "build:android:clean": "node -e \"const fs=require('fs');const path=require('path');const dist=path.join(process.cwd(),'dist');['win-unpacked','win-ia32-unpacked','mac','linux-unpacked','.icon-ico'].forEach(d=>{const p=path.join(dist,d);if(fs.existsSync(p))fs.rmSync(p,{recursive:true,force:true});});if(fs.existsSync(dist)){fs.readdirSync(dist).forEach(f=>{const p=path.join(dist,f);if(fs.statSync(p).isFile()&&(/\\\\.(exe|blockmap|yml)$/i.test(f)))fs.unlinkSync(p);});}\"",
+    "build:android:capacitor": "npx cap sync android && npm run build:android:gradle",
+    "build:android:gradle": "cd android && gradlew.bat assembleRelease",
+    "build:desktop": "npm run build:electron && vite build && electron-builder --win --mac --linux",
+    "build:all": "npm run build:electron && vite build && electron-builder --win --mac --linux && npm run build:android:capacitor",
+    "preview": "vite preview",
+    "test:storage": "node test-storage.mjs"
+  },
+  "build": {
+    "appId": "com.noxtiz.pos",
+    "productName": "Noxtiz POS",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json",
+      "!dist/win-unpacked/**/*",
+      "!dist/mac/**/*",
+      "!dist/linux-unpacked/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "public",
+        "to": "public",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/noxtiz.png"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "public/noxtiz.png",
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "icon": "public/noxtiz.png",
+      "category": "Office"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "https://noxtiz.com/updates/"
+    }
+  },
+  "keywords": [
+    "pos",
+    "electron",
+    "typescript",
+    "culinary"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^7.4.4",
+    "@radix-ui/react-dialog": "^1.0.5",
+    "@radix-ui/react-dropdown-menu": "^2.0.6",
+    "@radix-ui/react-select": "^2.0.0",
+    "@radix-ui/react-tabs": "^1.0.4",
+    "@upstash/redis": "^1.25.0",
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.6.2",
+    "framer-motion": "^10.16.16",
+    "jspdf": "^3.0.3",
+    "lucide-react": "^0.303.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.1",
+    "xlsx": "^0.18.5",
+    "zustand": "^4.4.7"
+  }
+}
