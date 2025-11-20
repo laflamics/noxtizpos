@@ -3,9 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, Edit2, Trash2, CheckCircle, Clock, AlertCircle, Sparkles, Users } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import type { Table } from '@/types';
+import LicenseCountdownBadge from '@/components/LicenseCountdownBadge';
+import { useNotification } from '@/components/NotificationProvider';
 
 export default function Tables() {
   const { currentUser, storage } = useStore();
+  const { notify } = useNotification();
   const [tables, setTables] = useState<Table[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -66,7 +69,11 @@ export default function Tables() {
       }
     } catch (error) {
       console.error('Failed to create table:', error);
-      alert('Gagal membuat meja');
+      notify({
+        type: 'error',
+        title: 'Tambah meja gagal',
+        message: 'Meja baru belum bisa dibuat. Coba lagi.',
+      });
     }
   };
 
@@ -110,7 +117,11 @@ export default function Tables() {
       }
     } catch (error) {
       console.error('Failed to update table:', error);
-      alert('Gagal update meja');
+      notify({
+        type: 'error',
+        title: 'Update meja gagal',
+        message: 'Perubahan meja belum tersimpan.',
+      });
     }
   };
 
@@ -142,7 +153,11 @@ export default function Tables() {
       }
     } catch (error) {
       console.error('Failed to delete table:', error);
-      alert('Gagal menghapus meja');
+      notify({
+        type: 'error',
+        title: 'Hapus meja gagal',
+        message: 'Meja belum terhapus. Silakan coba ulang.',
+      });
     }
   };
 
@@ -231,10 +246,13 @@ export default function Tables() {
           </h1>
           <p style={{ color: '#a0a0b0', fontSize: '16px' }}>Kelola meja restoran dan statusnya</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-          <Plus size={18} />
-          Tambah Meja
-        </button>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <LicenseCountdownBadge />
+          <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
+            <Plus size={18} />
+            Tambah Meja
+          </button>
+        </div>
       </div>
 
       {/* Status Summary */}

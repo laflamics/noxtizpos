@@ -1,52 +1,177 @@
+import { Capacitor } from '@capacitor/core';
+import { Directory, Filesystem } from '@capacitor/filesystem';
 import type { IStorage } from './base';
-import type { User, Product, Category, Order, AppSettings, StockMovement, InventoryReport, Table, ActivityLog, ActivityCategory } from '@/types';
+import type {
+  User,
+  Product,
+  Category,
+  Order,
+  AppSettings,
+  StockMovement,
+  InventoryReport,
+  Table,
+  ActivityLog,
+  ActivityCategory,
+  StorageSnapshot,
+  SnapshotImportOptions,
+  SyncReport,
+} from '@/types';
+import {
+  createEmptySyncReport,
+  finalizeReport,
+  mergeCollection,
+  normalizeSnapshot,
+  type SnapshotCollectionKey,
+} from './snapshotUtils';
 
-// Browser localStorage wrapper
-class BrowserStorage {
+const DEFAULT_SETTINGS: AppSettings = {
+  storageType: 'local',
+  taxRate: 0.1,
+  taxDisplayMode: 'include_hide',
+  currency: 'IDR',
+  companyName: 'Noxtiz Culinary Lab',
+  voidPin: '',
+};
+
+class HybridStorage {
   private prefix = 'noxtiz-pos-';
+  private baseDir = 'data';
+  private useFilesystem = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform();
+  private dirReady = false;
 
-  private getKey(key: string): string {
+  private get browserAvailable(): boolean {
+    return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+  }
+
+  private buildBrowserKey(key: string): string {
     return `${this.prefix}${key}`;
   }
 
-  get<T>(key: string, defaultValue: T): T {
+  private buildPath(key: string): string {
+    return `${this.baseDir}/${key}.json`;
+  }
+
+  private browserReadRaw(key: string): string | null {
+    if (!this.browserAvailable) return null;
     try {
-      if (typeof localStorage === 'undefined') {
-        console.warn('localStorage is not available, returning default value');
-        return defaultValue;
-      }
-      const item = localStorage.getItem(this.getKey(key));
-      if (item === null) return defaultValue;
-      return JSON.parse(item) as T;
+      return window.localStorage.getItem(this.buildBrowserKey(key));
+    } catch {
+      return null;
+    }
+  }
+
+  private browserRead<T>(key: string): T | undefined {
+    const raw = this.browserReadRaw(key);
+    if (!raw) return undefined;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private browserWrite<T>(key: string, value: T): void {
+    if (!this.browserAvailable) return;
+    try {
+      window.localStorage.setItem(this.buildBrowserKey(key), JSON.stringify(value));
     } catch (error) {
-      console.error(`Error reading ${key} from localStorage:`, error);
+      console.warn(`Gagal menulis ${key} ke localStorage:`, error);
+    }
+  }
+
+  private browserRemove(key: string): void {
+    if (!this.browserAvailable) return;
+    try {
+      window.localStorage.removeItem(this.buildBrowserKey(key));
+    } catch (error) {
+      console.warn(`Gagal menghapus ${key} di localStorage:`, error);
+    }
+  }
+
+  private async ensureDir(): Promise<void> {
+    if (!this.useFilesystem || this.dirReady) return;
+    try {
+      await Filesystem.mkdir({
+        path: this.baseDir,
+        directory: Directory.Data,
+        recursive: true,
+      });
+    } catch (error: any) {
+      if (!error?.message?.includes('AlreadyExists')) {
+        console.warn('Gagal membuat folder data:', error);
+      }
+    }
+    this.dirReady = true;
+  }
+
+  async get<T>(key: string, defaultValue: T): Promise<T> {
+    if (!this.useFilesystem) {
+      const value = this.browserRead<T>(key);
+      return typeof value === 'undefined' ? defaultValue : value;
+    }
+
+    await this.ensureDir();
+    const path = this.buildPath(key);
+    try {
+      const result = await Filesystem.readFile({
+        path,
+        directory: Directory.Data,
+        encoding: 'utf8',
+      });
+      return JSON.parse(result.data || 'null') ?? defaultValue;
+    } catch (error: any) {
+      const migrated = this.browserRead<T>(key);
+      if (typeof migrated !== 'undefined') {
+        await this.set(key, migrated);
+        this.browserRemove(key);
+        return migrated;
+      }
       return defaultValue;
     }
   }
 
-  set<T>(key: string, value: T): void {
+  async set<T>(key: string, value: T): Promise<void> {
+    if (!this.useFilesystem) {
+      this.browserWrite(key, value);
+      return;
+    }
+    await this.ensureDir();
+    const path = this.buildPath(key);
+    await Filesystem.writeFile({
+      path,
+      directory: Directory.Data,
+      encoding: 'utf8',
+      data: JSON.stringify(value),
+      recursive: true,
+    });
+  }
+
+  async remove(key: string): Promise<void> {
+    if (!this.useFilesystem) {
+      this.browserRemove(key);
+      return;
+    }
+    await this.ensureDir();
+    const path = this.buildPath(key);
     try {
-      if (typeof localStorage === 'undefined') {
-        console.warn('localStorage is not available, cannot save data');
-        return;
-      }
-      localStorage.setItem(this.getKey(key), JSON.stringify(value));
-    } catch (error) {
-      console.error(`Error writing ${key} to localStorage:`, error);
-      // Don't throw, just log - some browsers may have quota exceeded
-      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-        console.error('Storage quota exceeded. Please free up some space.');
+      await Filesystem.deleteFile({
+        path,
+        directory: Directory.Data,
+      });
+    } catch (error: any) {
+      if (!error?.message?.includes('File does not exist')) {
+        console.warn(`Gagal menghapus file ${path}:`, error);
       }
     }
   }
 }
 
-const storage = new BrowserStorage();
+const storage = new HybridStorage();
 
 export class LocalStorage implements IStorage {
   async initialize(): Promise<void> {
     // Initialize default admin user if no users exist
-    const users = storage.get<User[]>('users', []);
+    const users = await storage.get<User[]>('users', []);
     if (users.length === 0) {
       const defaultAdmin: User = {
         id: 'admin-1',
@@ -56,11 +181,11 @@ export class LocalStorage implements IStorage {
         createdAt: new Date().toISOString(),
         isActive: true,
       };
-      storage.set('users', [defaultAdmin]);
+      await storage.set('users', [defaultAdmin]);
     }
 
     // Initialize default categories
-    const categories = storage.get<Category[]>('categories', []);
+    const categories = await storage.get<Category[]>('categories', []);
     if (categories.length === 0) {
       const defaultCategories: Category[] = [
         { id: 'cat-1', name: 'Makanan', color: '#FF6B6B' },
@@ -68,7 +193,7 @@ export class LocalStorage implements IStorage {
         { id: 'cat-3', name: 'Dessert', color: '#FFE66D' },
         { id: 'cat-4', name: 'Snack', color: '#95E1D3' },
       ];
-      storage.set('categories', defaultCategories);
+      await storage.set('categories', defaultCategories);
     }
   }
 
@@ -89,7 +214,7 @@ export class LocalStorage implements IStorage {
       id: `user-${Date.now()}`,
       createdAt: new Date().toISOString(),
     };
-    storage.set('users', [...users, newUser]);
+    await storage.set('users', [...users, newUser]);
     return newUser;
   }
 
@@ -98,14 +223,14 @@ export class LocalStorage implements IStorage {
     const index = users.findIndex(u => u.id === id);
     if (index === -1) throw new Error('User not found');
     users[index] = { ...users[index], ...user };
-    storage.set('users', users);
+    await storage.set('users', users);
     return users[index];
   }
 
   async deleteUser(id: string): Promise<boolean> {
     const users = await this.getUsers();
     const filtered = users.filter(u => u.id !== id);
-    storage.set('users', filtered);
+    await storage.set('users', filtered);
     return true;
   }
 
@@ -128,7 +253,7 @@ export class LocalStorage implements IStorage {
       createdAt: now,
       updatedAt: now,
     };
-    storage.set('products', [...products, newProduct]);
+    await storage.set('products', [...products, newProduct]);
     return newProduct;
   }
 
@@ -137,14 +262,14 @@ export class LocalStorage implements IStorage {
     const index = products.findIndex(p => p.id === id);
     if (index === -1) throw new Error('Product not found');
     products[index] = { ...products[index], ...product, updatedAt: new Date().toISOString() };
-    storage.set('products', products);
+    await storage.set('products', products);
     return products[index];
   }
 
   async deleteProduct(id: string): Promise<boolean> {
     const products = await this.getProducts();
     const filtered = products.filter(p => p.id !== id);
-    storage.set('products', filtered);
+    await storage.set('products', filtered);
     return true;
   }
 
@@ -164,7 +289,7 @@ export class LocalStorage implements IStorage {
       ...category,
       id: `cat-${Date.now()}`,
     };
-    storage.set('categories', [...categories, newCategory]);
+    await storage.set('categories', [...categories, newCategory]);
     return newCategory;
   }
 
@@ -173,14 +298,14 @@ export class LocalStorage implements IStorage {
     const index = categories.findIndex(c => c.id === id);
     if (index === -1) throw new Error('Category not found');
     categories[index] = { ...categories[index], ...category };
-    storage.set('categories', categories);
+    await storage.set('categories', categories);
     return categories[index];
   }
 
   async deleteCategory(id: string): Promise<boolean> {
     const categories = await this.getCategories();
     const filtered = categories.filter(c => c.id !== id);
-    storage.set('categories', filtered);
+    await storage.set('categories', filtered);
     return true;
   }
 
@@ -201,7 +326,7 @@ export class LocalStorage implements IStorage {
       id: `order-${Date.now()}`,
       createdAt: new Date().toISOString(),
     };
-    storage.set('orders', [...orders, newOrder]);
+    await storage.set('orders', [...orders, newOrder]);
     return newOrder;
   }
 
@@ -210,27 +335,24 @@ export class LocalStorage implements IStorage {
     const index = orders.findIndex(o => o.id === id);
     if (index === -1) throw new Error('Order not found');
     orders[index] = { ...orders[index], ...order };
-    storage.set('orders', orders);
+    await storage.set('orders', orders);
     return orders[index];
   }
 
   async deleteOrder(id: string): Promise<boolean> {
     const orders = await this.getOrders();
     const filtered = orders.filter(o => o.id !== id);
-    storage.set('orders', filtered);
+    await storage.set('orders', filtered);
     return true;
   }
 
   // Settings
   async getSettings(): Promise<AppSettings> {
-    return storage.get<AppSettings>('settings', {
-      storageType: 'local',
-      taxRate: 0.1,
-      taxDisplayMode: 'include_hide',
-      currency: 'IDR',
-      companyName: 'Noxtiz Culinary Lab',
-      voidPin: '',
-    });
+    const settings = await storage.get<AppSettings>('settings', DEFAULT_SETTINGS);
+    if (!settings.voidPin) {
+      settings.voidPin = '';
+    }
+    return settings;
   }
 
   async updateSettings(settings: Partial<AppSettings>): Promise<AppSettings> {
@@ -240,7 +362,7 @@ export class LocalStorage implements IStorage {
     if (!updated.voidPin) {
       updated.voidPin = '';
     }
-    storage.set('settings', updated);
+    await storage.set('settings', updated);
     return updated;
   }
 
@@ -261,7 +383,7 @@ export class LocalStorage implements IStorage {
       id: `movement-${Date.now()}`,
       createdAt: new Date().toISOString(),
     };
-    storage.set('stockMovements', [...movements, newMovement]);
+    await storage.set('stockMovements', [...movements, newMovement]);
 
     // Update product stock
     const products = await this.getProducts();
@@ -269,7 +391,7 @@ export class LocalStorage implements IStorage {
     if (productIndex !== -1) {
       products[productIndex].stock = movement.newStock;
       products[productIndex].updatedAt = new Date().toISOString();
-      storage.set('products', products);
+      await storage.set('products', products);
     }
 
     return newMovement;
@@ -346,9 +468,9 @@ export class LocalStorage implements IStorage {
     if (existingOpening) {
       const index = movements.findIndex((m) => m.id === existingOpening.id);
       movements[index] = newMovement;
-      storage.set('stockMovements', movements);
+      await storage.set('stockMovements', movements);
     } else {
-      storage.set('stockMovements', [...movements, newMovement]);
+      await storage.set('stockMovements', [...movements, newMovement]);
     }
   }
 
@@ -370,7 +492,7 @@ export class LocalStorage implements IStorage {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    storage.set('tables', [...tables, newTable]);
+    await storage.set('tables', [...tables, newTable]);
     return newTable;
   }
 
@@ -380,14 +502,14 @@ export class LocalStorage implements IStorage {
     if (index === -1) throw new Error('Table not found');
     const updated = { ...tables[index], ...table, updatedAt: new Date().toISOString() };
     tables[index] = updated;
-    storage.set('tables', tables);
+    await storage.set('tables', tables);
     return updated;
   }
 
   async deleteTable(id: string): Promise<boolean> {
     const tables = await this.getTables();
     const filtered = tables.filter((t) => t.id !== id);
-    storage.set('tables', filtered);
+    await storage.set('tables', filtered);
     return filtered.length < tables.length;
   }
 
@@ -415,7 +537,7 @@ export class LocalStorage implements IStorage {
     };
     // Keep only last 10000 logs to prevent storage bloat
     const updatedLogs = [...logs, newLog].slice(-10000);
-    storage.set('activityLogs', updatedLogs);
+    await storage.set('activityLogs', updatedLogs);
     return newLog;
   }
 
@@ -442,7 +564,7 @@ export class LocalStorage implements IStorage {
       const orderDate = new Date(o.createdAt).toISOString();
       return orderDate < startDate || orderDate > `${endDate}T23:59:59.999Z`;
     });
-    storage.set('orders', filtered);
+    await storage.set('orders', filtered);
     return beforeCount - filtered.length;
   }
 
@@ -453,7 +575,7 @@ export class LocalStorage implements IStorage {
       const movementDate = new Date(m.createdAt).toISOString();
       return movementDate < startDate || movementDate > `${endDate}T23:59:59.999Z`;
     });
-    storage.set('stockMovements', filtered);
+    await storage.set('stockMovements', filtered);
     return beforeCount - filtered.length;
   }
 
@@ -464,28 +586,28 @@ export class LocalStorage implements IStorage {
       const logDate = new Date(l.createdAt).toISOString();
       return logDate < startDate || logDate > `${endDate}T23:59:59.999Z`;
     });
-    storage.set('activityLogs', filtered);
+    await storage.set('activityLogs', filtered);
     return beforeCount - filtered.length;
   }
 
   async deleteAllOrders(): Promise<number> {
     const orders = await this.getOrders();
     const count = orders.length;
-    storage.set('orders', []);
+    await storage.set('orders', []);
     return count;
   }
 
   async deleteAllStockMovements(): Promise<number> {
     const movements = await this.getStockMovements();
     const count = movements.length;
-    storage.set('stockMovements', []);
+    await storage.set('stockMovements', []);
     return count;
   }
 
   async deleteAllActivityLogs(): Promise<number> {
     const logs = await this.getActivityLogs();
     const count = logs.length;
-    storage.set('activityLogs', []);
+    await storage.set('activityLogs', []);
     return count;
   }
 
@@ -793,5 +915,73 @@ export class LocalStorage implements IStorage {
         message: error instanceof Error ? error.message : 'Gagal seed data',
       };
     }
+  }
+
+  async exportSnapshot(): Promise<StorageSnapshot> {
+    return {
+      generatedAt: new Date().toISOString(),
+      users: await this.getUsers(),
+      products: await this.getProducts(),
+      categories: await this.getCategories(),
+      orders: await this.getOrders(),
+      stockMovements: await this.getStockMovements(),
+      tables: await this.getTables(),
+      activityLogs: await this.getActivityLogs(),
+    };
+  }
+
+  async importSnapshot(
+    snapshot: StorageSnapshot,
+    options?: SnapshotImportOptions
+  ): Promise<SyncReport> {
+    const normalized = normalizeSnapshot(snapshot);
+    const report = createEmptySyncReport();
+
+    const mergeAndStore = async <T extends { id: string }>(
+      key: SnapshotCollectionKey,
+      getter: () => Promise<T[]>,
+      setter: (data: T[]) => Promise<void>,
+      incoming: T[]
+    ) => {
+      const existing = await getter();
+      const merged = mergeCollection(existing, incoming, options);
+      await setter(merged.data);
+      report.entities[key] = merged.stats;
+    };
+
+    await mergeAndStore('users', () => this.getUsers(), data => storage.set('users', data), normalized.users);
+    await mergeAndStore(
+      'products',
+      () => this.getProducts(),
+      data => storage.set('products', data),
+      normalized.products
+    );
+    await mergeAndStore(
+      'categories',
+      () => this.getCategories(),
+      data => storage.set('categories', data),
+      normalized.categories
+    );
+    await mergeAndStore(
+      'orders',
+      () => this.getOrders(),
+      data => storage.set('orders', data),
+      normalized.orders
+    );
+    await mergeAndStore(
+      'stockMovements',
+      () => this.getStockMovements(),
+      data => storage.set('stockMovements', data),
+      normalized.stockMovements
+    );
+    await mergeAndStore('tables', () => this.getTables(), data => storage.set('tables', data), normalized.tables);
+    await mergeAndStore(
+      'activityLogs',
+      () => this.getActivityLogs(),
+      data => storage.set('activityLogs', data),
+      normalized.activityLogs
+    );
+
+    return finalizeReport(report);
   }
 }

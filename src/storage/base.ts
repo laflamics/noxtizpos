@@ -1,4 +1,18 @@
-import type { User, Product, Category, Order, AppSettings, StockMovement, InventoryReport, Table, ActivityLog, ActivityCategory } from '@/types';
+import type {
+  User,
+  Product,
+  Category,
+  Order,
+  AppSettings,
+  StockMovement,
+  InventoryReport,
+  Table,
+  ActivityLog,
+  ActivityCategory,
+  StorageSnapshot,
+  SnapshotImportOptions,
+  SyncReport,
+} from '@/types';
 
 export interface IStorage {
   // Users
@@ -73,5 +87,9 @@ export interface IStorage {
 
   // Seed Data (optional, for LocalStorage)
   seedCoffeeShop?(): Promise<{ success: boolean; message: string }>;
+
+  // Snapshot helpers
+  exportSnapshot(): Promise<StorageSnapshot>;
+  importSnapshot(snapshot: StorageSnapshot, options?: SnapshotImportOptions): Promise<SyncReport>;
 }
 

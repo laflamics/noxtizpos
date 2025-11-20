@@ -198,6 +198,9 @@ function registerIpcHandlers() {
       throw error;
     }
   });
+
+  ipcMain.handle('storage:exportSnapshot', () => storageAPI.exportSnapshot());
+  ipcMain.handle('storage:importSnapshot', (_event, snapshot, options) => storageAPI.importSnapshot(snapshot, options));
 }
 
 // Register handlers immediately
@@ -225,7 +228,7 @@ function createWindow() {
     },
     titleBarStyle: 'default',
     backgroundColor: '#0a0a0f',
-    icon: path.join(__dirname, '../public/noxtiz.png'),
+    icon: path.join(__dirname, '../public/noxtiz.ico'),
   });
 
   // Load app

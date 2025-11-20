@@ -2,9 +2,14 @@ import { useState, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Minus, Trash2, ShoppingBag, X, CreditCard, Banknote, QrCode, Wallet, CheckCircle, Clock, AlertCircle, Users, Lock, Printer, Share2, Download, Mail, MessageCircle, Copy, FileText, Smartphone } from 'lucide-react';
+import LicenseCountdownBadge from '@/components/LicenseCountdownBadge';
+import { useNotification } from '@/components/NotificationProvider';
+
+type NotifyHandler = (options: { type?: 'success' | 'error' | 'warning' | 'info'; title?: string; message: string; duration?: number }) => void;
 
 export default function POS() {
   const { products, categories, cart, addToCart, removeFromCart, updateCartQuantity, clearCart, createOrder, currentUser, settings, loadProducts, storage } = useStore();
+  const { notify } = useNotification();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'debit' | 'qris' | 'digital'>('cash');
@@ -59,9 +64,12 @@ export default function POS() {
       return;
     }
 
+    const tableCart = tableCarts[selectedTable] || [];
+    const hasPendingItems = tableCart.length > 0;
+
     // Update table status to occupied when selected (if not already)
     const currentTable = tables.find((t) => t.id === selectedTable);
-    if (currentTable && currentTable.status === 'available' && storage) {
+    if (currentTable && currentTable.status === 'available' && storage && hasPendingItems) {
       storage.updateTable(selectedTable, { status: 'occupied' }).then(() => {
         loadTables();
       }).catch((error) => {
@@ -70,7 +78,6 @@ export default function POS() {
     }
 
     // Load cart for selected table
-    const tableCart = tableCarts[selectedTable] || [];
     if (tableCart.length > 0) {
       // Clear current cart first
       clearCart();
@@ -99,6 +106,229 @@ export default function POS() {
     } catch (error) {
       console.error('Failed to load tables:', error);
     }
+  };
+
+  const getTableStatusInfo = (status: string) => {
+    switch (status) {
+      case 'available':
+        return { label: 'Tersedia', color: '#00ff88', bg: 'rgba(0, 255, 136, 0.18)', icon: CheckCircle };
+      case 'occupied':
+        return { label: 'Terisi', color: '#ff6b6b', bg: 'rgba(255, 107, 107, 0.18)', icon: Users };
+      case 'reserved':
+        return { label: 'Dipesan', color: '#ffe66d', bg: 'rgba(255, 230, 109, 0.18)', icon: Clock };
+      case 'cleaning':
+        return { label: 'Bersih-bersih', color: '#00d4ff', bg: 'rgba(0, 212, 255, 0.18)', icon: AlertCircle };
+      default:
+        return { label: status, color: '#a0a0b0', bg: 'rgba(160, 160, 176, 0.18)', icon: AlertCircle };
+    }
+  };
+
+  const renderTableManager = () => {
+    if (tables.length === 0) return null;
+    const activeTable = selectedTable ? tables.find((t) => t.id === selectedTable) : null;
+    const activeHasOrder =
+      activeTable && ((tableCarts[activeTable.id] && tableCarts[activeTable.id].length > 0) || activeTable.status === 'occupied');
+    const activeStatus = activeHasOrder ? 'occupied' : activeTable?.status || 'available';
+    const statusInfo = activeTable ? getTableStatusInfo(activeStatus) : null;
+    const StatusIcon = statusInfo?.icon || Users;
+
+    return (
+      <div
+        className="card"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          padding: '14px 16px',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: '#a0a0b0' }}>Daftar Meja</label>
+            <button
+              className={`btn ${selectedTable === '' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => handleSelectTable('')}
+              style={{ padding: '6px 10px', fontSize: '11px' }}
+            >
+              Tanpa Meja
+            </button>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              maxHeight: isDesktop ? 'calc(100vh - 320px)' : '260px',
+              overflowY: 'auto',
+              paddingRight: '4px',
+            }}
+          >
+            {tables.map((table) => {
+              const hasOrder = (tableCarts[table.id] && tableCarts[table.id].length > 0) || table.status === 'occupied';
+              const computedStatus = hasOrder ? 'occupied' : table.status || 'available';
+              const info = getTableStatusInfo(computedStatus);
+              const Icon = info.icon;
+              const isActive = selectedTable === table.id;
+
+              return (
+                <button
+                  key={table.id}
+                  onClick={() => handleSelectTable(table.id)}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: `1px solid ${isActive ? info.color : 'var(--border-color)'}`,
+                    background: isActive ? info.bg : 'var(--bg-tertiary)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    textAlign: 'left',
+                    gap: '8px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Icon size={16} color={info.color} />
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#fff' }}>
+                        Meja {table.number} {table.name && `- ${table.name}`}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#a0a0b0' }}>
+                        Kapasitas {table.capacity} • {info.label}
+                      </div>
+                    </div>
+                  </div>
+                  {hasOrder && <span style={{ fontSize: '11px' }}>📋</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {selectedTable ? (
+          <>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+                  setPinAction(() => async () => {
+                    const newTableCarts = { ...tableCarts };
+                    delete newTableCarts[selectedTable];
+                    setTableCarts(newTableCarts);
+                    localStorage.setItem('tableCarts', JSON.stringify(newTableCarts));
+                    clearCart();
+
+                    if (storage && currentUser) {
+                      const active = tables.find((t) => t.id === selectedTable);
+                      await storage.createActivityLog({
+                        category: 'void',
+                        action: 'clear_cart',
+                        description: `Void clear cart meja ${active?.number || selectedTable}`,
+                        userId: currentUser.id,
+                        userName: currentUser.username,
+                        details: {
+                          tableId: selectedTable,
+                          tableNumber: active?.number,
+                          voidPin: settings.voidPin || '',
+                          voidBy: currentUser.username,
+                          cartTotal: cartTotal,
+                          items: cart.map((item) => ({
+                            productName: item.productName,
+                            quantity: item.quantity,
+                            price: item.price,
+                            subtotal: item.price * item.quantity,
+                          })),
+                        },
+                      });
+                    }
+                  });
+                  setShowPinModal(true);
+                }}
+                style={{ flex: 1, minWidth: '140px', padding: '8px 12px', fontSize: '12px' }}
+              >
+                Clear Cart Meja
+              </button>
+            </div>
+
+            {activeTable && statusInfo && (
+              <div
+                style={{
+                  background: statusInfo.bg,
+                  border: `1px solid ${statusInfo.color}`,
+                  borderRadius: '8px',
+                  padding: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <StatusIcon size={18} color={statusInfo.color} />
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, color: statusInfo.color, marginBottom: '2px' }}>
+                      Meja {activeTable.number} {activeTable.name && `- ${activeTable.name}`}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#a0a0b0' }}>Kapasitas {activeTable.capacity} kursi</div>
+                  </div>
+                </div>
+                <div>
+                  <span style={{ fontSize: '12px', color: '#a0a0b0', display: 'block', marginBottom: '4px' }}>Status</span>
+                  <select
+                    className="input"
+                    value={activeTable.status}
+                    onChange={async (e) => {
+                      const newStatus = e.target.value as 'available' | 'occupied' | 'reserved' | 'cleaning';
+                      try {
+                        if (storage) {
+                          await storage.updateTable(selectedTable, { status: newStatus });
+                          await loadTables();
+                        }
+                      } catch (error) {
+                        console.error('Failed to update table status:', error);
+                        notify({
+                          type: 'error',
+                          title: 'Update Status Meja',
+                          message: 'Gagal update status meja. Coba lagi ya.',
+                        });
+                      }
+                    }}
+                    style={{
+                      background: 'var(--bg-primary)',
+                      border: `1px solid ${statusInfo.color}`,
+                      color: statusInfo.color,
+                      fontWeight: 600,
+                      padding: '8px 10px',
+                      fontSize: '13px',
+                    }}
+                  >
+                    <option value="available">Tersedia</option>
+                    <option value="occupied">Terisi</option>
+                    <option value="reserved">Dipesan</option>
+                    <option value="cleaning">Bersih-bersih</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <p style={{ fontSize: '13px', color: '#606070' }}>Belum ada meja dipilih</p>
+        )}
+      </div>
+    );
+  };
+
+  const handleSelectTable = (newTableId: string) => {
+    if (newTableId === selectedTable) return;
+
+    if (selectedTable && cart.length > 0) {
+      const newTableCarts = { ...tableCarts, [selectedTable]: cart };
+      setTableCarts(newTableCarts);
+      localStorage.setItem('tableCarts', JSON.stringify(newTableCarts));
+    }
+
+    setSelectedTable(newTableId);
   };
 
   const filteredProducts = products.filter((p) => {
@@ -279,211 +509,58 @@ export default function POS() {
       }
       
       setSelectedTable('');
-      alert('Pesanan berhasil dibuat!');
+      notify({
+        type: 'success',
+        title: 'Checkout Berhasil',
+        message: 'Pesanan berhasil dibuat dan struk siap dibagikan.',
+      });
     } catch (error) {
       console.error('Failed to create order:', error);
-      alert('Gagal membuat pesanan');
+      notify({
+        type: 'error',
+        title: 'Checkout Gagal',
+        message: 'Gagal membuat pesanan. Coba lagi dalam beberapa detik.',
+      });
     }
   };
 
   return (
-    <div style={{ maxWidth: '1600px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <h1
-          style={{
-            fontSize: '32px',
-            fontWeight: 800,
-            marginBottom: '8px',
-            background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}
-        >
-          Point of Sale
-        </h1>
-        <p style={{ color: '#a0a0b0', fontSize: '16px' }}>Sistem kasir modern</p>
+    <div style={{ maxWidth: '1360px', margin: '0 auto', padding: '0 16px' }}>
+      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+        <div>
+          <h1
+            style={{
+              fontSize: '32px',
+              fontWeight: 800,
+              marginBottom: '8px',
+              background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >
+            Point of Sale
+          </h1>
+          <p style={{ color: '#a0a0b0', fontSize: '16px' }}>Sistem kasir modern</p>
+        </div>
+        <LicenseCountdownBadge />
       </div>
 
-      {/* Table Selection */}
-      {tables.length > 0 && (
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '16px' }}>
-            <div style={{ flex: 1, minWidth: '250px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500, color: '#a0a0b0' }}>
-                Pilih Meja
-              </label>
-              <select
-                className="input"
-                value={selectedTable}
-                onChange={(e) => {
-                  const newTableId = e.target.value;
-                  // Save current table's cart before switching
-                  if (selectedTable && cart.length > 0) {
-                    const newTableCarts = { ...tableCarts, [selectedTable]: cart };
-                    setTableCarts(newTableCarts);
-                    localStorage.setItem('tableCarts', JSON.stringify(newTableCarts));
-                  }
-                  setSelectedTable(newTableId);
-                }}
-                style={{ width: '100%' }}
-              >
-                <option value="">Tanpa Meja</option>
-                {tables.map((table) => {
-                  const hasCart = tableCarts[table.id] && tableCarts[table.id].length > 0;
-                  return (
-                    <option key={table.id} value={table.id}>
-                      Meja {table.number} {table.status === 'occupied' ? '(Terisi)' : ''} {hasCart ? '📋' : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            {selectedTable && (
-              <>
-                <button
-                  className="btn btn-secondary"
-                onClick={() => {
-                  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-                  setPinAction(() => async () => {
-                    const newTableCarts = { ...tableCarts };
-                    delete newTableCarts[selectedTable];
-                    setTableCarts(newTableCarts);
-                    localStorage.setItem('tableCarts', JSON.stringify(newTableCarts));
-                    clearCart();
-                    
-                    // Log void activity
-                    if (storage && currentUser) {
-                      const selectedTableData = tables.find((t) => t.id === selectedTable);
-                      await storage.createActivityLog({
-                        category: 'void',
-                        action: 'clear_cart',
-                        description: `Void clear cart meja ${selectedTableData?.number || selectedTable}`,
-                        userId: currentUser.id,
-                        userName: currentUser.username,
-                        details: {
-                          tableId: selectedTable,
-                          tableNumber: selectedTableData?.number,
-                          voidPin: settings.voidPin || '',
-                          voidBy: currentUser.username,
-                          cartTotal: cartTotal,
-                          items: cart.map(item => ({
-                            productName: item.productName,
-                            quantity: item.quantity,
-                            price: item.price,
-                            subtotal: item.price * item.quantity,
-                          })),
-                        },
-                      });
-                    }
-                  });
-                  setShowPinModal(true);
-                }}
-                  style={{ whiteSpace: 'nowrap' }}
-                >
-                  Clear Cart Meja
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Table Status Display & Edit */}
-          {selectedTable && (() => {
-            const currentTable = tables.find((t) => t.id === selectedTable);
-            if (!currentTable) return null;
-
-            const getStatusInfo = (status: string) => {
-              switch (status) {
-                case 'available':
-                  return { label: 'Tersedia', color: '#00ff88', bg: 'rgba(0, 255, 136, 0.2)', icon: CheckCircle };
-                case 'occupied':
-                  return { label: 'Terisi', color: '#ff6b6b', bg: 'rgba(255, 107, 107, 0.2)', icon: Users };
-                case 'reserved':
-                  return { label: 'Dipesan', color: '#ffe66d', bg: 'rgba(255, 230, 109, 0.2)', icon: Clock };
-                case 'cleaning':
-                  return { label: 'Bersih-bersih', color: '#00d4ff', bg: 'rgba(0, 212, 255, 0.2)', icon: AlertCircle };
-                default:
-                  return { label: status, color: '#a0a0b0', bg: 'rgba(160, 160, 176, 0.2)', icon: AlertCircle };
-              }
-            };
-
-            const statusInfo = getStatusInfo(currentTable.status);
-            const Icon = statusInfo.icon;
-
-            return (
-              <div
-                className="card"
-                style={{
-                  padding: '16px',
-                  background: statusInfo.bg,
-                  border: `2px solid ${statusInfo.color}`,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: '16px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <Icon size={24} color={statusInfo.color} />
-                  <div>
-                    <div style={{ fontSize: '18px', fontWeight: 700, color: statusInfo.color, marginBottom: '4px' }}>
-                      Meja {currentTable.number} {currentTable.name && `- ${currentTable.name}`}
-                    </div>
-                    <div style={{ fontSize: '14px', color: '#a0a0b0' }}>
-                      Kapasitas: {currentTable.capacity} kursi
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '14px', color: '#a0a0b0', marginRight: '8px' }}>Status:</span>
-                    <select
-                      className="input"
-                      value={currentTable.status}
-                      onChange={async (e) => {
-                        const newStatus = e.target.value as 'available' | 'occupied' | 'reserved' | 'cleaning';
-                        try {
-                          if (storage) {
-                            await storage.updateTable(selectedTable, { status: newStatus });
-                            await loadTables();
-                          }
-                        } catch (error) {
-                          console.error('Failed to update table status:', error);
-                          alert('Gagal update status meja');
-                        }
-                      }}
-                      style={{
-                        background: 'var(--bg-primary)',
-                        border: `1px solid ${statusInfo.color}`,
-                        color: statusInfo.color,
-                        fontWeight: 600,
-                        minWidth: '150px',
-                      }}
-                    >
-                      <option value="available">Tersedia</option>
-                      <option value="occupied">Terisi</option>
-                      <option value="reserved">Dipesan</option>
-                      <option value="cleaning">Bersih-bersih</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      )}
+      {!isDesktop && renderTableManager()}
 
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: isDesktop ? '1fr 400px' : '1fr',
-          gap: '24px',
+          gridTemplateColumns: isDesktop ? '240px 1fr 300px' : '1fr',
+          gap: '18px',
+          alignItems: 'flex-start',
         }}
       >
+        {isDesktop && renderTableManager()}
+
         {/* Products Section */}
         <div>
           {/* Search & Category Filter */}
-          <div style={{ marginBottom: '24px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <input
               type="text"
               className="input"
@@ -517,8 +594,8 @@ export default function POS() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-              gap: '16px',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+              gap: '10px',
             }}
           >
             {filteredProducts.map((product) => (
@@ -530,21 +607,21 @@ export default function POS() {
                 style={{
                   cursor: 'pointer',
                   textAlign: 'center',
-                  padding: '20px',
+                  padding: '14px',
                 }}
                 onClick={() => addToCart(product)}
               >
                 <div
                   style={{
                     width: '100%',
-                    height: '120px',
+                    height: '88px',
                     background: 'var(--bg-tertiary)',
                     borderRadius: '8px',
-                    marginBottom: '12px',
+                    marginBottom: '8px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '48px',
+                    fontSize: '36px',
                   }}
                 >
                   {product.image ? (
@@ -553,14 +630,14 @@ export default function POS() {
                     <span>🍽️</span>
                   )}
                 </div>
-                <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>
+                <h3 style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
                   {product.name}
                 </h3>
-                <p style={{ color: '#00ff88', fontSize: '18px', fontWeight: 700 }}>
+                <p style={{ color: '#00ff88', fontSize: '15px', fontWeight: 700 }}>
                   Rp {product.price.toLocaleString('id-ID')}
                 </p>
                 {product.stock < 10 && (
-                  <p style={{ color: '#ffe66d', fontSize: '12px', marginTop: '4px' }}>
+                  <p style={{ color: '#ffe66d', fontSize: '10px', marginTop: '4px' }}>
                     Stok: {product.stock}
                   </p>
                 )}
@@ -579,15 +656,15 @@ export default function POS() {
           className="card"
           style={{
             position: isDesktop ? 'sticky' : 'relative',
-            top: isDesktop ? '32px' : 'auto',
-            height: isDesktop ? 'calc(100vh - 64px)' : 'auto',
+            top: isDesktop ? '16px' : 'auto',
+            height: isDesktop ? 'calc(100vh - 96px)' : 'auto',
             display: 'flex',
             flexDirection: 'column',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-            <ShoppingBag size={24} color="#00ff88" />
-            <h2 style={{ fontSize: '24px', fontWeight: 700 }}>Keranjang</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <ShoppingBag size={18} color="#00ff88" />
+            <h2 style={{ fontSize: '16px', fontWeight: 700 }}>Keranjang</h2>
             {cart.length > 0 && (
               <button
                 className="btn btn-secondary"
@@ -620,7 +697,7 @@ export default function POS() {
                   });
                   setShowPinModal(true);
                 }}
-                style={{ marginLeft: 'auto', padding: '6px 12px', fontSize: '12px' }}
+                style={{ marginLeft: 'auto', padding: '4px 8px', fontSize: '10px' }}
               >
                 <Trash2 size={14} />
                 Hapus
@@ -628,30 +705,30 @@ export default function POS() {
             )}
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', marginBottom: '24px' }}>
+          <div style={{ flex: 1, overflowY: 'auto', marginBottom: '14px' }}>
             {cart.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px', color: '#606070' }}>
-                <ShoppingBag size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
+              <div style={{ textAlign: 'center', padding: '40px', color: '#606070' }}>
+                <ShoppingBag size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                 <p>Keranjang kosong</p>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {cart.map((item) => {
                   const product = products.find((p) => p.id === item.productId);
                   return (
                     <div
                       key={item.productId}
                       style={{
-                        padding: '16px',
+                        padding: '8px',
                         background: 'var(--bg-tertiary)',
-                        borderRadius: '8px',
+                        borderRadius: '6px',
                         border: '1px solid var(--border-color)',
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '8px' }}>
                         <div style={{ flex: 1 }}>
-                          <h4 style={{ fontWeight: 600, marginBottom: '4px' }}>{item.productName}</h4>
-                          <p style={{ color: '#00ff88', fontSize: '16px', fontWeight: 600 }}>
+                          <h4 style={{ fontWeight: 600, marginBottom: '2px', fontSize: '13px' }}>{item.productName}</h4>
+                          <p style={{ color: '#00ff88', fontSize: '14px', fontWeight: 600 }}>
                             Rp {item.price.toLocaleString('id-ID')}
                           </p>
                         </div>
@@ -687,32 +764,32 @@ export default function POS() {
                             });
                             setShowPinModal(true);
                           }}
-                          style={{ padding: '4px 8px', minWidth: 'auto' }}
+                          style={{ padding: '3px 6px', minWidth: 'auto' }}
                         >
                           <X size={16} />
                         </button>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <button
                           className="btn btn-secondary"
                           onClick={() => updateCartQuantity(item.productId, item.quantity - 1)}
-                          style={{ padding: '6px', minWidth: 'auto' }}
+                          style={{ padding: '4px', minWidth: 'auto' }}
                         >
                           <Minus size={16} />
                         </button>
-                        <span style={{ flex: 1, textAlign: 'center', fontWeight: 600, fontSize: '18px' }}>
+                        <span style={{ flex: 1, textAlign: 'center', fontWeight: 600, fontSize: '15px' }}>
                           {item.quantity}
                         </span>
                         <button
                           className="btn btn-secondary"
                           onClick={() => updateCartQuantity(item.productId, item.quantity + 1)}
                           disabled={product && item.quantity >= product.stock}
-                          style={{ padding: '6px', minWidth: 'auto' }}
+                          style={{ padding: '4px', minWidth: 'auto' }}
                         >
                           <Plus size={16} />
                         </button>
                       </div>
-                      <p style={{ textAlign: 'right', marginTop: '8px', fontWeight: 600, color: '#00ff88' }}>
+                      <p style={{ textAlign: 'right', marginTop: '6px', fontWeight: 600, color: '#00ff88', fontSize: '13px' }}>
                         Rp {(item.price * item.quantity).toLocaleString('id-ID')}
                       </p>
                     </div>
@@ -723,13 +800,13 @@ export default function POS() {
           </div>
 
           {cart.length > 0 && (
-            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
                 <span style={{ color: '#a0a0b0' }}>Subtotal</span>
                 <span style={{ fontWeight: 600 }}>Rp {subtotal.toLocaleString('id-ID')}</span>
               </div>
               {taxDisplayMode !== 'include_hide' && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
                   <span style={{ color: '#a0a0b0' }}>Pajak ({((settings.taxRate || 0.1) * 100).toFixed(0)}%)</span>
                   <span style={{ fontWeight: 600 }}>Rp {tax.toLocaleString('id-ID')}</span>
                 </div>
@@ -738,20 +815,20 @@ export default function POS() {
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  paddingTop: '16px',
+                  paddingTop: '12px',
                   borderTop: '1px solid var(--border-color)',
-                  marginTop: '16px',
+                  marginTop: '12px',
                 }}
               >
-                <span style={{ fontSize: '20px', fontWeight: 700 }}>Total</span>
-                <span style={{ fontSize: '24px', fontWeight: 800, color: '#00ff88' }}>
+                <span style={{ fontSize: '18px', fontWeight: 700 }}>Total</span>
+                <span style={{ fontSize: '20px', fontWeight: 800, color: '#00ff88' }}>
                   Rp {finalTotal.toLocaleString('id-ID')}
                 </span>
               </div>
               <button
                 className="btn btn-primary"
                 onClick={() => setShowPaymentModal(true)}
-                style={{ width: '100%', marginTop: '20px', padding: '16px', fontSize: '16px', fontWeight: 700 }}
+                style={{ width: '100%', marginTop: '14px', padding: '12px', fontSize: '14px', fontWeight: 700 }}
               >
                 Checkout
               </button>
@@ -962,7 +1039,11 @@ export default function POS() {
                     if (e.key === 'Enter') {
                       const voidPin = settings.voidPin || '';
                       if (!voidPin) {
-                        alert('PIN Void belum diatur di Settings');
+                        notify({
+                          type: 'warning',
+                          title: 'PIN Void belum diset',
+                          message: 'Atur PIN Void dulu di halaman Settings ya.',
+                        });
                         return;
                       }
                       if (pinInput === voidPin) {
@@ -973,7 +1054,11 @@ export default function POS() {
                         setPinInput('');
                         setPinAction(null);
                       } else {
-                        alert('PIN salah!');
+                        notify({
+                          type: 'error',
+                          title: 'PIN salah',
+                          message: 'PIN Void yang dimasukkin belum cocok.',
+                        });
                         setPinInput('');
                       }
                     }
@@ -1004,7 +1089,11 @@ export default function POS() {
                   onClick={() => {
                     const voidPin = settings.voidPin || '';
                     if (!voidPin) {
-                      alert('PIN Void belum diatur di Settings');
+                      notify({
+                        type: 'warning',
+                        title: 'PIN Void belum diset',
+                        message: 'Atur PIN Void dulu di halaman Settings ya.',
+                      });
                       return;
                     }
                     if (pinInput === voidPin) {
@@ -1015,7 +1104,11 @@ export default function POS() {
                       setPinInput('');
                       setPinAction(null);
                     } else {
-                      alert('PIN salah!');
+                      notify({
+                        type: 'error',
+                        title: 'PIN salah',
+                        message: 'PIN Void yang dimasukkin belum cocok.',
+                      });
                       setPinInput('');
                     }
                   }}
@@ -1158,7 +1251,7 @@ export default function POS() {
                       // Try Bluetooth printer first (Android)
                       if ('bluetooth' in navigator) {
                         try {
-                          await printToBluetoothPrinter(lastOrder, settings);
+                          await printToBluetoothPrinter(lastOrder, settings, notify);
                           return;
                         } catch (error: any) {
                           console.log('Bluetooth print failed, trying fallback:', error);
@@ -1425,10 +1518,18 @@ export default function POS() {
                     try {
                       const receiptContent = generateReceiptContent(lastOrder, settings);
                       await navigator.clipboard.writeText(receiptContent);
-                      alert('Struk disalin ke clipboard!');
+                      notify({
+                        type: 'success',
+                        title: 'Struk Tersalin',
+                        message: 'Konten struk sudah masuk clipboard.',
+                      });
                       setShowShareModal(false);
                     } catch (error) {
-                      alert('Gagal menyalin ke clipboard');
+                      notify({
+                        type: 'error',
+                        title: 'Copy Struk Gagal',
+                        message: 'Tidak bisa menyalin ke clipboard. Coba lagi.',
+                      });
                     }
                   }}
                   style={{ justifyContent: 'flex-start', padding: '16px' }}
@@ -1834,14 +1935,14 @@ function generatePDFContent(order: any, settings: any) {
 }
 
 // Print to Bluetooth printer - support both BLE and Classic Bluetooth
-async function printToBluetoothPrinter(order: any, settings: any) {
+async function printToBluetoothPrinter(order: any, settings: any, notify?: NotifyHandler) {
   // Generate receipt in ESC/POS format
   const receiptContent = generateReceiptContentPOS80(order, settings);
   
   // Try Web Bluetooth API first (BLE)
   if ('bluetooth' in navigator) {
     try {
-      await printViaWebBluetooth(receiptContent);
+      await printViaWebBluetooth(receiptContent, notify);
       return;
     } catch (error: any) {
       console.log('Web Bluetooth (BLE) failed, trying Classic Bluetooth:', error);
@@ -1852,7 +1953,7 @@ async function printToBluetoothPrinter(order: any, settings: any) {
   // Try Classic Bluetooth via Android Intent
   if (typeof window !== 'undefined' && (window as any).Capacitor) {
     try {
-      await printViaClassicBluetooth(receiptContent);
+      await printViaClassicBluetooth(receiptContent, notify);
       return;
     } catch (error: any) {
       console.log('Classic Bluetooth failed:', error);
@@ -1870,7 +1971,7 @@ async function printToBluetoothPrinter(order: any, settings: any) {
 }
 
 // Print via Web Bluetooth API (BLE)
-async function printViaWebBluetooth(receiptContent: string) {
+async function printViaWebBluetooth(receiptContent: string, notify?: NotifyHandler) {
   if (!('bluetooth' in navigator)) {
     throw new Error('Web Bluetooth tidak tersedia');
   }
@@ -1909,7 +2010,11 @@ async function printViaWebBluetooth(receiptContent: string) {
     // Disconnect
     device.gatt.disconnect();
     
-    alert('Struk berhasil dikirim ke printer Bluetooth (BLE)!');
+    notify?.({
+      type: 'success',
+      title: 'Struk Dikirim',
+      message: 'Struk berhasil dikirim ke printer Bluetooth (BLE).',
+    });
   } catch (error: any) {
     if (error.name === 'NotFoundError') {
       throw new Error('Printer Bluetooth tidak ditemukan. Pastikan printer sudah di-pair dan aktif.');
@@ -1924,7 +2029,7 @@ async function printViaWebBluetooth(receiptContent: string) {
 }
 
 // Print via Classic Bluetooth (Android Intent)
-async function printViaClassicBluetooth(receiptContent: string) {
+async function printViaClassicBluetooth(receiptContent: string, notify?: NotifyHandler) {
   const Capacitor = (window as any).Capacitor;
   if (!Capacitor || !Capacitor.Plugins) {
     throw new Error('Capacitor tidak tersedia');
@@ -1938,7 +2043,11 @@ async function printViaClassicBluetooth(receiptContent: string) {
       // Create intent to send data to printer apps
       const intent = `intent://print#Intent;action=android.intent.action.SEND;type=text/plain;S.android.intent.extra.TEXT=${encodeURIComponent(receiptContent)};end`;
       await App.openUrl({ url: intent });
-      alert('Pilih aplikasi printer untuk print struk');
+      notify?.({
+        type: 'info',
+        title: 'Pilih Aplikasi Printer',
+        message: 'Pilih aplikasi printer favorit untuk nge-print struk ya.',
+      });
       return;
     }
     

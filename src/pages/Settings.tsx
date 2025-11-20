@@ -1,10 +1,32 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { motion } from 'framer-motion';
-import { Save, Server, Database, DollarSign, Building, Lock, Receipt, Image, X, Download, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
+import { Save, Server, Database, DollarSign, Building, Lock, Receipt, Image, X, Download, RefreshCw, CheckCircle, AlertCircle, Shield } from 'lucide-react';
+import { useNotification } from '@/components/NotificationProvider';
+import { ensureProcessPolyfill } from '@/polyfills/process';
+import { formatLicenseInfo } from '@/lib/licenseUtils';
+import LicenseCountdownBadge from '@/components/LicenseCountdownBadge';
 
 export default function Settings() {
-  const { settings, loadSettings, updateSettings, switchStorage, storageType } = useStore();
+  const {
+    settings,
+    loadSettings,
+    updateSettings,
+    switchStorage,
+    storageType,
+    syncNow,
+    isSyncing,
+    lastSyncReport,
+    syncError,
+    licenseStatus,
+    licenseType,
+    licenseExpiresAt,
+    licenseMessage,
+    isLicenseRequesting,
+    activateLicenseCode,
+    refreshLicenseStatus,
+  } = useStore();
+  const { notify } = useNotification();
   const [formData, setFormData] = useState({
     companyName: '',
     currency: 'IDR',
@@ -17,8 +39,10 @@ export default function Settings() {
     receiptLogo: '',
     receiptHeader: '',
     receiptFooter: '',
+    autoSyncIntervalHours: 6,
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [licenseCodeInput, setLicenseCodeInput] = useState('');
   
   // Update state
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'>('idle');
@@ -26,6 +50,12 @@ export default function Settings() {
   const [updateError, setUpdateError] = useState<string>('');
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [appVersion, setAppVersion] = useState<string>('');
+  const formatSyncTime = (value?: string) =>
+    value ? new Date(value).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : 'Belum pernah sinkron';
+  const autoSyncOptions = [1, 3, 6, 12, 24];
+  const canSyncToServer = settings.storageType === 'local' && !!settings.redisUrl && !!settings.redisToken;
+  const lastSyncText = formatSyncTime(settings.lastSyncedAt);
+  const licenseInfoText = formatLicenseInfo(licenseType, licenseExpiresAt);
 
   useEffect(() => {
     // Get app version
@@ -115,6 +145,7 @@ export default function Settings() {
         receiptLogo: settings.receiptLogo || '',
         receiptHeader: settings.receiptHeader || '',
         receiptFooter: settings.receiptFooter || '',
+        autoSyncIntervalHours: settings.autoSyncIntervalHours ?? 6,
       });
     }
   }, [settings]);
@@ -127,9 +158,14 @@ export default function Settings() {
       // If storage type changed, switch storage first
       if (formData.storageType !== storageType) {
         if (formData.storageType === 'redis' && formData.redisUrl && formData.redisToken) {
+        ensureProcessPolyfill();
           // Validate URL format
           if (!formData.redisUrl.startsWith('http://') && !formData.redisUrl.startsWith('https://')) {
-            alert('Redis URL harus dimulai dengan http:// atau https://');
+            notify({
+              type: 'warning',
+              title: 'Redis URL kurang pas',
+              message: 'Redis URL wajib diawali http:// atau https://',
+            });
             setIsSaving(false);
             return;
           }
@@ -146,7 +182,13 @@ export default function Settings() {
             console.log('✅ Redis connection test successful');
           } catch (testError) {
             console.error('❌ Redis connection test failed:', testError);
-            alert(`Gagal terhubung ke Redis:\n${testError instanceof Error ? testError.message : 'Unknown error'}\n\nPastikan URL dan Token benar.\n\nContoh format:\nURL: https://just-feline-6702.upstash.io\nToken: ARouAAImcDI5ZTUyMDE5ODlkYmE0Y2I0YTU4OTBiNTg2OTNiMmJjZnAyNjcwMg`);
+            notify({
+              type: 'error',
+              title: 'Tes Redis gagal',
+              message: `Pastikan URL & token valid ya.\nDetail: ${
+                testError instanceof Error ? testError.message : 'Unknown error'
+              }\n\nContoh:\nURL: https://just-feline-6702.upstash.io\nToken: ARouAAImc...`,
+            });
             setIsSaving(false);
             return;
           }
@@ -169,33 +211,83 @@ export default function Settings() {
         receiptLogo: formData.receiptLogo,
         receiptHeader: formData.receiptHeader,
         receiptFooter: formData.receiptFooter,
+        autoSyncIntervalHours: formData.autoSyncIntervalHours,
       });
 
-      alert('Settings berhasil disimpan!');
+      notify({
+        type: 'success',
+        title: 'Settings tersimpan',
+        message: 'Semua konfigurasi terbaru sudah ke-save.',
+      });
     } catch (error) {
       console.error('Failed to save settings:', error);
-      alert('Gagal menyimpan settings');
+      notify({
+        type: 'error',
+        title: 'Simpan settings gagal',
+        message: 'Coba ulangi sebentar lagi ya.',
+      });
     } finally {
       setIsSaving(false);
     }
   };
 
+  const handleLicenseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!licenseCodeInput.trim()) return;
+    try {
+      await activateLicenseCode(licenseCodeInput.trim());
+      notify({
+        type: 'success',
+        title: 'Lisensi aktif',
+        message: 'Kode lisensi berhasil diterapkan.',
+      });
+      setLicenseCodeInput('');
+    } catch (error) {
+      notify({
+        type: 'error',
+        title: 'Aktivasi gagal',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const handleManualSync = async () => {
+    try {
+      await syncNow();
+      notify({
+        type: 'success',
+        title: 'Sinkronisasi berhasil',
+        message: 'Data lokal berhasil dikirim ke server online.',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Sinkronisasi gagal, coba lagi.';
+      notify({
+        type: 'error',
+        title: 'Sinkronisasi gagal',
+        message,
+      });
+    }
+  };
+
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto', paddingBottom: '40px' }}>
-      <div style={{ marginBottom: '32px' }}>
-        <h1
-          style={{
-            fontSize: '32px',
-            fontWeight: 800,
-            marginBottom: '8px',
-            background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}
-        >
-          Settings
-        </h1>
-        <p style={{ color: '#a0a0b0', fontSize: '16px' }}>Konfigurasi aplikasi</p>
+      <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+        <div>
+          <h1
+            style={{
+              fontSize: '32px',
+              fontWeight: 800,
+              marginBottom: '8px',
+              background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >
+            Settings
+          </h1>
+          <p style={{ color: '#a0a0b0', fontSize: '16px' }}>Konfigurasi aplikasi</p>
+        </div>
+        <LicenseCountdownBadge />
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -368,6 +460,28 @@ export default function Settings() {
               </motion.div>
             )}
 
+            <div>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>
+                Interval Auto Sync (jam)
+              </label>
+              <select
+                className="input"
+                value={formData.autoSyncIntervalHours}
+                onChange={(e) =>
+                  setFormData({ ...formData, autoSyncIntervalHours: Number(e.target.value) })
+                }
+              >
+                {autoSyncOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option} jam
+                  </option>
+                ))}
+              </select>
+              <p style={{ fontSize: '12px', color: '#a0a0b0', marginTop: '4px' }}>
+                Auto sync jalan otomatis tiap {formData.autoSyncIntervalHours} jam saat mode lokal.
+              </p>
+            </div>
+
             <div
               style={{
                 padding: '12px',
@@ -377,8 +491,126 @@ export default function Settings() {
                 color: '#a0a0b0',
               }}
             >
-              <strong>Status saat ini:</strong> {storageType === 'local' ? 'Local Storage' : 'Server Online'}
+              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <strong>Status saat ini:</strong> {storageType === 'local' ? 'Local Storage' : 'Server Online'}
+                </div>
+                <div>
+                  <strong>Terakhir sinkron:</strong> {lastSyncText}
+                </div>
+              </div>
+              {lastSyncReport && (
+                <div style={{ marginTop: '8px', color: '#00ff88' }}>
+                  <CheckCircle size={14} style={{ marginRight: '6px' }} />
+                  Sinkron terbaru nambah {lastSyncReport.totalInserted} data baru.
+                </div>
+              )}
+              {syncError && (
+                <div style={{ marginTop: '8px', color: '#ff6b6b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertCircle size={14} />
+                  <span>Error sinkron: {syncError}</span>
+                </div>
+              )}
+              <button
+                type="button"
+                className="button"
+                onClick={handleManualSync}
+                disabled={!canSyncToServer || isSyncing}
+                style={{
+                  marginTop: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  opacity: !canSyncToServer || isSyncing ? 0.6 : 1,
+                }}
+              >
+                <RefreshCw size={16} />
+                {isSyncing ? 'Sinkronisasi...' : 'Sinkron Sekarang'}
+              </button>
+              <p style={{ fontSize: '12px', marginTop: '4px' }}>
+                Tombol ini akan copy data lokal ke server online (butuh koneksi internet).
+              </p>
             </div>
+          </div>
+        </motion.div>
+
+        {/* License Settings */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="card"
+          style={{ marginBottom: '24px' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            <Shield size={24} color="#ff6b6b" />
+            <div>
+              <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Lisensi Aplikasi</h2>
+              <p style={{ color: '#a0a0b0', fontSize: '14px' }}>
+                Status: <strong>{licenseStatus.toUpperCase()}</strong> • {licenseInfoText}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => refreshLicenseStatus({ force: true })}
+              style={{ marginLeft: 'auto', padding: '8px 12px' }}
+            >
+              <RefreshCw size={16} />
+              Cek Status
+            </button>
+          </div>
+          {licenseMessage && (
+            <div
+              style={{
+                padding: '12px',
+                borderRadius: '8px',
+                background: 'rgba(255, 107, 107, 0.12)',
+                border: '1px solid rgba(255, 107, 107, 0.4)',
+                color: '#ffb347',
+                marginBottom: '16px',
+                whiteSpace: 'pre-line',
+              }}
+            >
+              {licenseMessage}
+            </div>
+          )}
+          <form onSubmit={handleLicenseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <label style={{ fontSize: '14px', fontWeight: 500 }}>Masukkan Kode Lisensi</label>
+            <input
+              type="text"
+              className="input"
+              placeholder="Contoh: 9832874912askbdidbi96291"
+              value={licenseCodeInput}
+              onChange={(e) => setLicenseCodeInput(e.target.value)}
+            />
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={isLicenseRequesting || !licenseCodeInput.trim()}
+              style={{ alignSelf: 'flex-start', minWidth: '200px' }}
+            >
+              {isLicenseRequesting ? 'Memproses...' : 'Aktifkan Lisensi'}
+            </button>
+          </form>
+          <div
+            style={{
+              marginTop: '16px',
+              padding: '12px',
+              borderRadius: '8px',
+              background: 'var(--bg-tertiary)',
+              fontSize: '13px',
+              color: '#a0a0b0',
+              lineHeight: 1.6,
+            }}
+          >
+            <p style={{ marginBottom: '4px' }}>
+              Hubungi <strong>081311549824 (Panji)</strong> untuk pembelian lisensi.
+            </p>
+            <p style={{ marginBottom: '4px' }}>
+              Transfer ke <strong>BCA a/n Panji: 0821112345</strong>.
+            </p>
+            <p>Kirim bukti transfer via WhatsApp ke nomor tersebut.</p>
           </div>
         </motion.div>
 

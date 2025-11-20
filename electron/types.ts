@@ -154,5 +154,44 @@ export interface AppSettings {
   receiptLogo?: string; // Base64 encoded image atau path
   receiptHeader?: string; // Header text untuk receipt (bisa multi-line)
   receiptFooter?: string; // Footer text untuk receipt (bisa multi-line)
+  autoSyncIntervalHours?: number;
+  lastSyncedAt?: string;
+  lastSyncDirection?: 'local_to_redis' | 'redis_to_local';
+}
+
+export interface StorageSnapshot {
+  generatedAt: string;
+  users: User[];
+  products: Product[];
+  categories: Category[];
+  orders: Order[];
+  stockMovements: StockMovement[];
+  tables: Table[];
+  activityLogs: ActivityLog[];
+}
+
+export interface SyncEntityStats {
+  inserted: number;
+  updated: number;
+  skipped: number;
+}
+
+export interface SyncReport {
+  startedAt: string;
+  finishedAt: string;
+  entities: {
+    users: SyncEntityStats;
+    products: SyncEntityStats;
+    categories: SyncEntityStats;
+    orders: SyncEntityStats;
+    stockMovements: SyncEntityStats;
+    tables: SyncEntityStats;
+    activityLogs: SyncEntityStats;
+  };
+  totalInserted: number;
+}
+
+export interface SnapshotImportOptions {
+  mode?: 'insert_only' | 'upsert';
 }
 

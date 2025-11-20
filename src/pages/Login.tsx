@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { motion } from 'framer-motion';
 import { LogIn, Settings } from 'lucide-react';
+import { ensureProcessPolyfill } from '@/polyfills/process';
 
 export default function Login() {
   const navigate = useNavigate();
   const { login, loadUsers, users, setCurrentUser } = useStore();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -22,7 +23,8 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const user = await login(username, password);
+      ensureProcessPolyfill();
+      const user = await login(email, password);
       if (user) {
         setCurrentUser(user);
         navigate('/pos');
@@ -137,14 +139,14 @@ export default function Login() {
                 color: '#a0a0b0',
               }}
             >
-              Username
+              Email
             </label>
             <input
-              type="text"
+              type="email"
               className="input"
-              placeholder="Masukkan username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Masukkan email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
               autoFocus
             />
@@ -192,11 +194,11 @@ export default function Login() {
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={isLoading || !username}
+            disabled={isLoading || !email}
             style={{
               width: '100%',
-              opacity: isLoading || !username ? 0.5 : 1,
-              cursor: isLoading || !username ? 'not-allowed' : 'pointer',
+              opacity: isLoading || !email ? 0.5 : 1,
+              cursor: isLoading || !email ? 'not-allowed' : 'pointer',
             }}
           >
             <LogIn size={18} />

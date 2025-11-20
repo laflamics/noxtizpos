@@ -1,5 +1,19 @@
 import type { IStorage } from './base';
-import type { User, Product, Category, Order, AppSettings, StockMovement, InventoryReport, Table, ActivityLog, ActivityCategory } from '@/types';
+import type {
+  User,
+  Product,
+  Category,
+  Order,
+  AppSettings,
+  StockMovement,
+  InventoryReport,
+  Table,
+  ActivityLog,
+  ActivityCategory,
+  StorageSnapshot,
+  SnapshotImportOptions,
+  SyncReport,
+} from '@/types';
 
 declare global {
   interface Window {
@@ -74,6 +88,8 @@ declare global {
         deleteAllOrders: () => Promise<number>;
         deleteAllStockMovements: () => Promise<number>;
         deleteAllActivityLogs: () => Promise<number>;
+        exportSnapshot: () => Promise<StorageSnapshot>;
+        importSnapshot: (snapshot: StorageSnapshot, options?: SnapshotImportOptions) => Promise<SyncReport>;
       };
     };
   }
@@ -287,6 +303,17 @@ export class ElectronStorage implements IStorage {
 
   async deleteAllActivityLogs(): Promise<number> {
     return this.api.deleteAllActivityLogs();
+  }
+
+  async exportSnapshot(): Promise<StorageSnapshot> {
+    return this.api.exportSnapshot();
+  }
+
+  async importSnapshot(
+    snapshot: StorageSnapshot,
+    options?: SnapshotImportOptions
+  ): Promise<SyncReport> {
+    return this.api.importSnapshot(snapshot, options);
   }
 }
 

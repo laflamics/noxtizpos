@@ -1,6 +1,6 @@
-# Noxtiz POS - Multi User Point of Sale System
+# Noxtiz Culinary Lab POS
 
-Sistem POS (Point of Sale) modern dengan tema futuristik Culinary Lab, dibangun dengan Electron, React, dan TypeScript. Mendukung multi-user dan dapat berjalan di PC, tablet, dan smartphone.
+Sistem POS (Point of Sale) untuk Culinary Lab dengan tema futuristik. Dibangun dengan Electron, React, dan TypeScript. Mendukung multi-user dan dapat berjalan di PC, tablet, dan smartphone.
 
 ## ✨ Features
 
@@ -10,8 +10,8 @@ Sistem POS (Point of Sale) modern dengan tema futuristik Culinary Lab, dibangun 
 - 🛒 **POS Lengkap** - Sistem kasir dengan cart, checkout, dan payment methods
 - 📦 **Manajemen Produk** - CRUD produk dengan kategori dan stok management
 - 📊 **Dashboard** - Statistik real-time dan laporan penjualan
+- 🔐 **License System** - Sistem lisensi dengan trial 7 hari
 - 📱 **Responsive** - Optimized untuk desktop, tablet, dan mobile
-- ⚡ **Fast & Modern** - Built dengan React, TypeScript, dan Vite
 
 ## 🚀 Quick Start
 
@@ -57,8 +57,14 @@ npm run build:win
      - Butuh Redis URL dan Token dari [Upstash](https://upstash.com)
 
 2. **Login**
-   - Default admin user: `admin`
-   - Bisa tambah user baru di halaman Users (hanya admin)
+   - Login menggunakan **email** (bukan username)
+   - Email harus unique untuk setiap user
+   - Default admin user dibuat otomatis saat pertama kali setup
+
+3. **License**
+   - Trial 7 hari otomatis aktif saat pertama kali registrasi
+   - Setelah trial habis, perlu aktivasi license
+   - License types: Trial, Weekly, Monthly, Yearly, Lifetime
 
 ### Features Overview
 
@@ -67,7 +73,7 @@ npm run build:win
 - **Produk**: Kelola produk, kategori, dan stok
 - **Pesanan**: Riwayat transaksi dan pesanan
 - **Users**: Manajemen user (Admin only)
-- **Settings**: Konfigurasi aplikasi, storage, dan pengaturan keuangan
+- **Settings**: Konfigurasi aplikasi, storage, license, dan pengaturan keuangan
 
 ## 🛠️ Tech Stack
 
@@ -81,29 +87,11 @@ npm run build:win
   - Local: electron-store
   - Cloud: @upstash/redis
 
-## 📁 Project Structure
-
-```
-noxtizpos/
-├── electron/          # Electron main process
-│   ├── main.ts       # Main entry point
-│   └── preload.ts    # Preload script
-├── src/
-│   ├── components/   # React components
-│   ├── pages/        # Page components
-│   ├── storage/      # Storage abstraction layer
-│   ├── store/        # Zustand store
-│   ├── types/        # TypeScript types
-│   └── main.tsx      # React entry point
-├── package.json
-└── vite.config.ts
-```
-
 ## 🔧 Configuration
 
 ### Storage Settings
 
-Bisa diubah di halaman Settings atau saat pertama kali setup:
+Bisa diubah di halaman Settings:
 
 - **Local Storage**: Tidak perlu konfigurasi tambahan
 - **Upstash Redis**: 
@@ -112,9 +100,11 @@ Bisa diubah di halaman Settings atau saat pertama kali setup:
   3. Copy URL dan Token
   4. Masukkan di Settings
 
-### Environment Variables
+### License Settings
 
-Tidak diperlukan environment variables untuk local storage. Untuk Redis, credentials disimpan di settings aplikasi.
+- Trial 7 hari otomatis aktif saat registrasi pertama kali
+- Aktivasi license bisa dilakukan di halaman Settings
+- Untuk informasi license, hubungi admin
 
 ## 📱 Responsive Design
 
@@ -122,21 +112,6 @@ Aplikasi fully responsive dan optimized untuk:
 - **Desktop**: Full sidebar dan layout
 - **Tablet**: Adaptive layout dengan mobile menu
 - **Mobile**: Mobile-first design dengan hamburger menu
-
-## 🎨 Customization
-
-### Theme Colors
-
-Edit `src/index.css` untuk mengubah warna tema:
-
-```css
-:root {
-  --accent-primary: #00ff88;    /* Green accent */
-  --accent-secondary: #00d4ff;  /* Blue accent */
-  --bg-primary: #0a0a0f;        /* Dark background */
-  /* ... */
-}
-```
 
 ## 🐛 Troubleshooting
 
@@ -152,9 +127,14 @@ Jika ada error saat build, pastikan:
 - **Local Storage**: Pastikan aplikasi punya permission write di folder user data
 - **Redis**: Pastikan URL dan Token valid, dan koneksi internet tersedia
 
+### License Issues
+
+- Trial otomatis aktif saat registrasi pertama kali
+- Jika license tidak terdeteksi, pastikan koneksi internet untuk sync ke server
+
 ## 📝 License
 
-MIT License - Feel free to use and modify!
+Sistem POS ini menggunakan license system dengan trial 7 hari. Untuk informasi lebih lanjut, hubungi admin.
 
 ## 👨‍💻 Development
 
@@ -165,13 +145,16 @@ MIT License - Feel free to use and modify!
 - `npm run build:win` - Build Windows executable
 - `npm run preview` - Preview production build
 
-### Adding Features
+### Project Structure
 
-1. Components: Tambah di `src/components/`
-2. Pages: Tambah di `src/pages/` dan register di `src/App.tsx`
-3. Storage: Extend interface di `src/storage/base.ts`
+- `src/components/` - React components
+- `src/pages/` - Page components
+- `src/storage/` - Storage abstraction (Local, Redis, Electron)
+- `src/store/` - Zustand state management
+- `src/lib/` - Utility functions (license, device, etc)
+- `src/types/` - TypeScript type definitions
 
 ---
 
-**Made with ❤️ for Culinary Lab POS**
+**Noxtiz Culinary Lab POS**
 

@@ -3,9 +3,12 @@ import { useStore } from '@/store/useStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit, Trash2, Search, X, Upload, Download, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { useNotification } from '@/components/NotificationProvider';
+import LicenseCountdownBadge from '@/components/LicenseCountdownBadge';
 
 export default function Products() {
   const { products, categories, loadProducts, loadCategories, createProduct, updateProduct, deleteProduct, updateCategory, currentUser, storage } = useStore();
+  const { notify } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
@@ -16,6 +19,7 @@ export default function Products() {
   const [isImporting, setIsImporting] = useState(false);
   const [editingCategoryCosting, setEditingCategoryCosting] = useState<string | null>(null);
   const [costingPercentage, setCostingPercentage] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'products' | 'costing'>('products');
 
   useEffect(() => {
     loadProducts();
@@ -87,7 +91,11 @@ export default function Products() {
       (e.target as HTMLFormElement).reset();
     } catch (error) {
       console.error('Failed to save product:', error);
-      alert('Gagal menyimpan produk');
+      notify({
+        type: 'error',
+        title: 'Simpan produk gagal',
+        message: 'Perubahan produk belum tersimpan. Coba ulangi ya.',
+      });
     }
   };
 
@@ -340,14 +348,18 @@ export default function Products() {
         }
       } catch (error) {
         console.error('Failed to delete product:', error);
-        alert('Gagal menghapus produk');
+        notify({
+          type: 'error',
+          title: 'Hapus produk gagal',
+          message: 'Produk belum terhapus. Coba beberapa saat lagi.',
+        });
       }
     }
   };
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', flexWrap: 'wrap', gap: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <h1
             style={{
@@ -361,154 +373,199 @@ export default function Products() {
           >
             Produk
           </h1>
-          <p style={{ color: '#a0a0b0', fontSize: '16px' }}>Kelola produk dan stok</p>
+          <p style={{ color: '#a0a0b0', fontSize: '16px' }}>
+            {activeTab === 'products' ? 'Kelola daftar produk, stok, dan import data' : 'Atur persentase costing per kategori'}
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <button
-            className="btn btn-secondary"
-            onClick={downloadTemplate}
-          >
-            <Download size={18} />
-            Download Template
-          </button>
-          <button
-            className="btn btn-secondary"
-            onClick={() => {
-              setShowImportModal(true);
-              setImportError('');
-              setImportSuccess('');
-            }}
-          >
-            <Upload size={18} />
-            Import Produk
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={() => {
-              setEditingProduct(null);
-              setShowModal(true);
-            }}
-          >
-            <Plus size={18} />
-            Tambah Produk
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: '250px', position: 'relative' }}>
-          <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#606070' }} />
-          <input
-            type="text"
-            className="input"
-            placeholder="Cari produk..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ paddingLeft: '40px' }}
-          />
-        </div>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            className={`btn ${selectedCategory === 'all' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setSelectedCategory('all')}
-          >
-            Semua
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              className={`btn ${selectedCategory === cat.id ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setSelectedCategory(cat.id)}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: '20px',
-        }}
-      >
-        {filteredProducts.map((product) => (
-          <motion.div
-            key={product.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="card"
-          >
-            <div
-              style={{
-                width: '100%',
-                height: '180px',
-                background: 'var(--bg-tertiary)',
-                borderRadius: '8px',
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '64px',
-              }}
-            >
-              {product.image ? (
-                <img src={product.image} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} />
-              ) : (
-                <span>🍽️</span>
-              )}
-            </div>
-            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>{product.name}</h3>
-            {product.description && (
-              <p style={{ color: '#a0a0b0', fontSize: '14px', marginBottom: '12px' }}>{product.description}</p>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div>
-                <p style={{ color: '#00ff88', fontSize: '20px', fontWeight: 700 }}>
-                  Rp {product.price.toLocaleString('id-ID')}
-                </p>
-                <p style={{ color: product.stock < 10 ? '#ffe66d' : '#a0a0b0', fontSize: '14px', marginTop: '4px' }}>
-                  Stok: {product.stock}
-                </p>
-              </div>
-              <span
-                style={{
-                  padding: '6px 12px',
-                  background: 'var(--bg-tertiary)',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  color: '#a0a0b0',
-                }}
-              >
-                {categories.find((c) => c.id === product.category)?.name || product.category}
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
+          <LicenseCountdownBadge />
+          {activeTab === 'products' && (
+            <>
               <button
                 className="btn btn-secondary"
-                onClick={() => handleEdit(product)}
-                style={{ flex: 1, padding: '10px', fontSize: '13px' }}
+                onClick={downloadTemplate}
               >
-                <Edit size={16} />
-                Edit
+                <Download size={18} />
+                Download Template
               </button>
               <button
-                className="btn btn-danger"
-                onClick={() => handleDelete(product.id)}
-                style={{ padding: '10px', fontSize: '13px' }}
+                className="btn btn-secondary"
+                onClick={() => {
+                  setShowImportModal(true);
+                  setImportError('');
+                  setImportSuccess('');
+                }}
               >
-                <Trash2 size={16} />
+                <Upload size={18} />
+                Import Produk
               </button>
-            </div>
-          </motion.div>
-        ))}
-        {filteredProducts.length === 0 && (
-          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px', color: '#606070' }}>
-            Tidak ada produk ditemukan
-          </div>
-        )}
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setEditingProduct(null);
+                  setShowModal(true);
+                }}
+              >
+                <Plus size={18} />
+                Tambah Produk
+              </button>
+            </>
+          )}
+        </div>
       </div>
+
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '28px', flexWrap: 'wrap' }}>
+        {[
+          { key: 'products', label: 'Daftar Produk', caption: 'List & stok' },
+          { key: 'costing', label: 'Costing', caption: 'Persentase kategori' },
+        ].map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              className="card"
+              onClick={() => setActiveTab(tab.key as 'products' | 'costing')}
+              style={{
+                border: isActive ? '1px solid #00ff88' : '1px solid var(--border-color)',
+                background: isActive ? 'rgba(0, 255, 136, 0.12)' : 'var(--bg-secondary)',
+                color: '#fff',
+                padding: '12px 18px',
+                minWidth: '180px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: isActive ? '0 0 20px rgba(0, 255, 136, 0.2)' : undefined,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: '4px',
+              }}
+            >
+              <span style={{ fontSize: '14px', fontWeight: 700 }}>{tab.label}</span>
+              <span style={{ fontSize: '12px', color: '#a0a0b0' }}>{tab.caption}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === 'products' && (
+        <>
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '250px', position: 'relative' }}>
+              <Search size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#606070' }} />
+              <input
+                type="text"
+                className="input"
+                placeholder="Cari produk..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ paddingLeft: '40px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                className={`btn ${selectedCategory === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setSelectedCategory('all')}
+              >
+                Semua
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  className={`btn ${selectedCategory === cat.id ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setSelectedCategory(cat.id)}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              gap: '20px',
+            }}
+          >
+            {filteredProducts.map((product) => (
+              <motion.div
+                key={product.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="card"
+              >
+                <div
+                  style={{
+                    width: '100%',
+                    height: '180px',
+                    background: 'var(--bg-tertiary)',
+                    borderRadius: '8px',
+                    marginBottom: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '64px',
+                  }}
+                >
+                  {product.image ? (
+                    <img src={product.image} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} />
+                  ) : (
+                    <span>🍽️</span>
+                  )}
+                </div>
+                <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>{product.name}</h3>
+                {product.description && (
+                  <p style={{ color: '#a0a0b0', fontSize: '14px', marginBottom: '12px' }}>{product.description}</p>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div>
+                    <p style={{ color: '#00ff88', fontSize: '20px', fontWeight: 700 }}>
+                      Rp {product.price.toLocaleString('id-ID')}
+                    </p>
+                    <p style={{ color: product.stock < 10 ? '#ffe66d' : '#a0a0b0', fontSize: '14px', marginTop: '4px' }}>
+                      Stok: {product.stock}
+                    </p>
+                  </div>
+                  <span
+                    style={{
+                      padding: '6px 12px',
+                      background: 'var(--bg-tertiary)',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      color: '#a0a0b0',
+                    }}
+                  >
+                    {categories.find((c) => c.id === product.category)?.name || product.category}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => handleEdit(product)}
+                    style={{ flex: 1, padding: '10px', fontSize: '13px' }}
+                  >
+                    <Edit size={16} />
+                    Edit
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => handleDelete(product.id)}
+                    style={{ padding: '10px', fontSize: '13px' }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+            {filteredProducts.length === 0 && (
+              <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px', color: '#606070' }}>
+                Tidak ada produk ditemukan
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Add/Edit Modal */}
       <AnimatePresence>
@@ -897,130 +954,145 @@ export default function Products() {
         )}
       </AnimatePresence>
 
-      {/* Category Costing Management */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="card"
-        style={{ marginTop: '24px' }}
-      >
-        <h3 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '20px' }}>
-          Costing per Kategori
-        </h3>
-        <p style={{ color: '#a0a0b0', fontSize: '14px', marginBottom: '20px' }}>
-          Atur persentase costing untuk setiap kategori. Costing digunakan untuk menghitung margin/profit.
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
-          {categories.map((cat) => (
-            <div
-              key={cat.id}
-              style={{
-                padding: '16px',
-                background: 'var(--bg-tertiary)',
-                borderRadius: '8px',
-                border: '1px solid var(--border-color)',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h4 style={{ fontSize: '16px', fontWeight: 600 }}>{cat.name}</h4>
-                {editingCategoryCosting === cat.id ? (
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => {
-                      setEditingCategoryCosting(null);
-                      setCostingPercentage('');
-                    }}
-                    style={{ padding: '4px 8px', fontSize: '12px' }}
-                  >
-                    Batal
-                  </button>
-                ) : (
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => {
-                      setEditingCategoryCosting(cat.id);
-                      setCostingPercentage((cat.costingPercentage || 0).toString());
-                    }}
-                    style={{ padding: '4px 8px', fontSize: '12px' }}
-                  >
-                    <Edit size={14} />
-                    Edit
-                  </button>
-                )}
-              </div>
-              {editingCategoryCosting === cat.id ? (
-                <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>
-                    Costing Percentage (%)
-                  </label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      type="number"
-                      className="input"
-                      value={costingPercentage}
-                      onChange={(e) => setCostingPercentage(e.target.value)}
-                      min="0"
-                      max="100"
-                      step="0.1"
-                      placeholder="0"
-                      style={{ flex: 1 }}
-                    />
-                    <button
-                      className="btn btn-primary"
-                      onClick={async () => {
-                        try {
-                          const percentage = parseFloat(costingPercentage) || 0;
-                          if (percentage < 0 || percentage > 100) {
-                            alert('Persentase harus antara 0-100');
-                            return;
-                          }
-                          await updateCategory(cat.id, { costingPercentage: percentage });
+      {activeTab === 'costing' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="card"
+          style={{ marginTop: '24px' }}
+        >
+          <h3 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '20px' }}>
+            Costing per Kategori
+          </h3>
+          <p style={{ color: '#a0a0b0', fontSize: '14px', marginBottom: '20px' }}>
+            Atur persentase costing untuk setiap kategori. Costing digunakan untuk menghitung margin/profit.
+          </p>
+          {categories.length === 0 ? (
+            <div style={{ textAlign: 'center', color: '#606070', padding: '24px' }}>
+              Belum ada kategori terdaftar. Tambah kategori di modul produk dulu ya.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+              {categories.map((cat) => (
+                <div
+                  key={cat.id}
+                  style={{
+                    padding: '16px',
+                    background: 'var(--bg-tertiary)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h4 style={{ fontSize: '16px', fontWeight: 600 }}>{cat.name}</h4>
+                    {editingCategoryCosting === cat.id ? (
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => {
                           setEditingCategoryCosting(null);
                           setCostingPercentage('');
-                          
-                          // Log activity
-                          if (storage && currentUser) {
-                            await storage.createActivityLog({
-                              category: 'product',
-                              action: 'update',
-                              description: `Update costing percentage kategori "${cat.name}" menjadi ${percentage}%`,
-                              userId: currentUser.id,
-                              userName: currentUser.username,
-                              details: {
-                                categoryId: cat.id,
-                                categoryName: cat.name,
-                                previousValue: cat.costingPercentage || 0,
-                                newValue: percentage,
-                              },
-                            });
-                          }
-                        } catch (error) {
-                          console.error('Failed to update category costing:', error);
-                          alert('Gagal mengupdate costing percentage');
-                        }
-                      }}
-                      style={{ padding: '8px 16px', fontSize: '14px' }}
-                    >
-                      Simpan
-                    </button>
+                        }}
+                        style={{ padding: '4px 8px', fontSize: '12px' }}
+                      >
+                        Batal
+                      </button>
+                    ) : (
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          setEditingCategoryCosting(cat.id);
+                          setCostingPercentage((cat.costingPercentage || 0).toString());
+                        }}
+                        style={{ padding: '4px 8px', fontSize: '12px' }}
+                      >
+                        <Edit size={14} />
+                        Edit
+                      </button>
+                    )}
                   </div>
+                  {editingCategoryCosting === cat.id ? (
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>
+                        Costing Percentage (%)
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="number"
+                          className="input"
+                          value={costingPercentage}
+                          onChange={(e) => setCostingPercentage(e.target.value)}
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          placeholder="0"
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          className="btn btn-primary"
+                          onClick={async () => {
+                            try {
+                              const percentage = parseFloat(costingPercentage) || 0;
+                              if (percentage < 0 || percentage > 100) {
+                                notify({
+                                  type: 'warning',
+                                  title: 'Input persentase salah',
+                                  message: 'Nilai harus di antara 0-100%.',
+                                });
+                                return;
+                              }
+                              await updateCategory(cat.id, { costingPercentage: percentage });
+                              setEditingCategoryCosting(null);
+                              setCostingPercentage('');
+                              
+                              // Log activity
+                              if (storage && currentUser) {
+                                await storage.createActivityLog({
+                                  category: 'product',
+                                  action: 'update',
+                                  description: `Update costing percentage kategori "${cat.name}" menjadi ${percentage}%`,
+                                  userId: currentUser.id,
+                                  userName: currentUser.username,
+                                  details: {
+                                    categoryId: cat.id,
+                                    categoryName: cat.name,
+                                    previousValue: cat.costingPercentage || 0,
+                                    newValue: percentage,
+                                  },
+                                });
+                              }
+                            } catch (error) {
+                              console.error('Failed to update category costing:', error);
+                              notify({
+                                type: 'error',
+                                title: 'Update costing gagal',
+                                message: 'Tidak bisa update costing percentage kategori.',
+                              });
+                            }
+                          }}
+                          style={{ padding: '8px 16px', fontSize: '14px' }}
+                        >
+                          Simpan
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <p style={{ fontSize: '24px', fontWeight: 700, color: '#00ff88', marginBottom: '4px' }}>
+                        {cat.costingPercentage || 0}%
+                      </p>
+                      <p style={{ fontSize: '12px', color: '#a0a0b0' }}>
+                        {cat.costingPercentage 
+                          ? `Costing: ${cat.costingPercentage}% dari harga jual`
+                          : 'Belum diatur'}
+                      </p>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div>
-                  <p style={{ fontSize: '24px', fontWeight: 700, color: '#00ff88', marginBottom: '4px' }}>
-                    {cat.costingPercentage || 0}%
-                  </p>
-                  <p style={{ fontSize: '12px', color: '#a0a0b0' }}>
-                    {cat.costingPercentage 
-                      ? `Costing: ${cat.costingPercentage}% dari harga jual`
-                      : 'Belum diatur'}
-                  </p>
-                </div>
-              )}
+              ))}
             </div>
-          ))}
-        </div>
-      </motion.div>
+          )}
+        </motion.div>
+      )}
     </div>
   );
 }

@@ -19,9 +19,11 @@ import UserGuide from './pages/UserGuide';
 import StorageTest from './pages/StorageTest';
 import Layout from './components/Layout';
 import LoadingScreen from './components/LoadingScreen';
+import { useNotification } from './components/NotificationProvider';
 
 function App() {
   const { initialize, isInitialized, currentUser } = useStore();
+  const { notify } = useNotification();
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -33,13 +35,20 @@ function App() {
       } catch (error) {
         console.error('Failed to initialize:', error);
         // Show error to user instead of stuck on loading
-        alert(`Gagal menginisialisasi aplikasi: ${error instanceof Error ? error.message : String(error)}\n\nSilakan refresh halaman atau restart aplikasi.`);
+        notify({
+          type: 'error',
+          title: 'Inisialisasi Gagal',
+          message: `Silakan refresh halaman atau restart aplikasi.\nDetail: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          duration: 6000,
+        });
       } finally {
         setIsLoading(false);
       }
     };
     init();
-  }, [initialize]);
+  }, [initialize, notify]);
 
   if (isLoading) {
     return <LoadingScreen />;

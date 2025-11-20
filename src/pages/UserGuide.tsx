@@ -12,6 +12,7 @@ export default function UserGuide() {
     'orders': false,
     'users': false,
     'settings': false,
+    'license': false,
     'dashboard': false,
     'activity-logs': false,
   });
@@ -75,9 +76,10 @@ export default function UserGuide() {
             </h3>
             <ol style={{ paddingLeft: '24px', lineHeight: '1.8', color: '#a0a0b0' }}>
               <li>Buka aplikasi Noxtiz POS</li>
-              <li>Masukkan <strong>Username</strong> dan <strong>Password</strong> yang diberikan admin</li>
-              <li>Klik tombol <strong>"Login"</strong></li>
+              <li>Masukkan <strong>Email</strong> dan <strong>Password</strong> yang diberikan admin</li>
+              <li>Klik tombol <strong>"Masuk"</strong></li>
               <li>Jika belum punya akun, klik <strong>"Belum punya akun? Daftar"</strong> untuk membuat akun baru</li>
+              <li><strong>Catatan:</strong> Email harus unique untuk setiap user</li>
             </ol>
           </div>
 
@@ -349,10 +351,13 @@ export default function UserGuide() {
             </h3>
             <ol style={{ paddingLeft: '24px', lineHeight: '1.8', color: '#a0a0b0' }}>
               <li>Klik tombol <strong>"Tambah User"</strong></li>
-              <li>Isi form: Username, Email, Password, Role</li>
+              <li>Isi form: Username, <strong>Email</strong> (wajib, harus unique), Password, Role</li>
               <li>Untuk role selain Admin, pilih permission yang diizinkan (checklist menu)</li>
               <li>Klik <strong>"Simpan"</strong></li>
             </ol>
+            <p style={{ color: '#a0a0b0', lineHeight: '1.8', marginTop: '12px' }}>
+              <strong>Catatan:</strong> Email digunakan untuk login, bukan username. Email harus unique untuk setiap user.
+            </p>
           </div>
 
           <div>
@@ -422,6 +427,120 @@ export default function UserGuide() {
               <li>Klik <strong>"Cek Update Sekarang"</strong> untuk manual check</li>
               <li>Jika ada update, klik <strong>"Download Update"</strong></li>
               <li>Setelah download selesai, klik <strong>"Install & Restart"</strong></li>
+            </ul>
+          </div>
+        </div>
+      </GuideSection>
+
+      {/* License */}
+      <GuideSection
+        id="license"
+        title="License"
+        icon={<Lock size={24} />}
+        isOpen={openSections['license']}
+        onToggle={() => toggleSection('license')}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '12px', color: 'var(--accent-color)' }}>
+              Trial 7 Hari
+            </h3>
+            <p style={{ color: '#a0a0b0', lineHeight: '1.8', marginBottom: '12px' }}>
+              Saat pertama kali registrasi atau login, Anda akan mendapatkan <strong>trial 7 hari</strong> secara otomatis. Selama masa trial, semua fitur POS dapat digunakan dengan lengkap.
+            </p>
+            <p style={{ color: '#a0a0b0', lineHeight: '1.8' }}>
+              <strong>Catatan:</strong> Trial aktif baik saat online maupun offline.
+            </p>
+          </div>
+
+          <div>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '12px', color: 'var(--accent-color)' }}>
+              Melihat Status License
+            </h3>
+            <ol style={{ paddingLeft: '24px', lineHeight: '1.8', color: '#a0a0b0' }}>
+              <li>Klik menu <strong>Settings</strong></li>
+              <li>Scroll ke bagian <strong>License</strong></li>
+              <li>Lihat informasi:
+                <ul style={{ paddingLeft: '20px', marginTop: '8px' }}>
+                  <li><strong>Status:</strong> Trial, Active, Expired, atau Revoked</li>
+                  <li><strong>Type:</strong> Trial, Weekly, Monthly, Yearly, atau Lifetime</li>
+                  <li><strong>Expires At:</strong> Tanggal kadaluarsa license</li>
+                  <li><strong>Countdown:</strong> Sisa waktu license (ditampilkan di header setiap halaman)</li>
+                </ul>
+              </li>
+            </ol>
+          </div>
+
+          <div>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '12px', color: 'var(--accent-color)' }}>
+              Aktivasi License
+            </h3>
+            <p style={{ color: '#a0a0b0', lineHeight: '1.8', marginBottom: '12px' }}>
+              Setelah trial habis, Anda perlu mengaktivasi license untuk melanjutkan penggunaan:
+            </p>
+            <ol style={{ paddingLeft: '24px', lineHeight: '1.8', color: '#a0a0b0' }}>
+              <li>Klik menu <strong>Settings</strong></li>
+              <li>Scroll ke bagian <strong>License</strong></li>
+              <li>Masukkan <strong>kode license</strong> yang diberikan</li>
+              <li>Klik tombol <strong>"Aktifkan Lisensi"</strong></li>
+              <li>Tunggu proses aktivasi selesai</li>
+            </ol>
+            <p style={{ color: '#a0a0b0', lineHeight: '1.8', marginTop: '12px' }}>
+              <strong>Catatan:</strong> Kode license akan dikirim setelah pembayaran. Pastikan koneksi internet saat aktivasi. License terikat ke perangkat yang digunakan.
+            </p>
+          </div>
+
+          <div>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '12px', color: 'var(--accent-color)' }}>
+              Tipe License
+            </h3>
+            <ul style={{ paddingLeft: '24px', lineHeight: '1.8', color: '#a0a0b0' }}>
+              <li><strong>Trial:</strong> 7 hari gratis (otomatis aktif)</li>
+              <li><strong>Weekly:</strong> 1 minggu</li>
+              <li><strong>Monthly:</strong> 1 bulan</li>
+              <li><strong>Yearly:</strong> 1 tahun</li>
+              <li><strong>Lifetime:</strong> Selamanya (ditandai dengan badge bintang kuning ⭐)</li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '12px', color: 'var(--accent-color)' }}>
+              License Expired
+            </h3>
+            <p style={{ color: '#a0a0b0', lineHeight: '1.8', marginBottom: '12px' }}>
+              Jika license sudah habis:
+            </p>
+            <ol style={{ paddingLeft: '24px', lineHeight: '1.8', color: '#a0a0b0' }}>
+              <li>Popup license akan muncul otomatis</li>
+              <li>Popup <strong>tidak bisa ditutup</strong> sampai license diaktivasi</li>
+              <li>Masukkan kode license baru di popup</li>
+              <li>Klik <strong>"Aktifkan Lisensi"</strong></li>
+            </ol>
+          </div>
+
+          <div>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '12px', color: 'var(--accent-color)' }}>
+              Membeli License
+            </h3>
+            <p style={{ color: '#a0a0b0', lineHeight: '1.8', marginBottom: '12px' }}>
+              Untuk membeli license:
+            </p>
+            <ol style={{ paddingLeft: '24px', lineHeight: '1.8', color: '#a0a0b0' }}>
+              <li>Hubungi <strong>081311549824 (Panji)</strong> via WhatsApp</li>
+              <li>Transfer ke <strong>BCA a/n Panji: 0821112345</strong></li>
+              <li>Kirim bukti transfer via WhatsApp</li>
+              <li>Tunggu kode license dikirim</li>
+            </ol>
+          </div>
+
+          <div>
+            <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '12px', color: 'var(--accent-color)' }}>
+              Troubleshooting License
+            </h3>
+            <ul style={{ paddingLeft: '24px', lineHeight: '1.8', color: '#a0a0b0' }}>
+              <li><strong>License tidak terdeteksi:</strong> Pastikan koneksi internet untuk sync, cek status license di Settings, restart aplikasi</li>
+              <li><strong>Trial tidak aktif:</strong> Pastikan sudah registrasi/login pertama kali, cek koneksi internet (untuk sync ke server), hubungi admin jika masalah berlanjut</li>
+              <li><strong>License expired padahal masih lama:</strong> Cek tanggal sistem komputer/device, pastikan tanggal sudah benar, hubungi admin untuk verifikasi</li>
             </ul>
           </div>
         </div>

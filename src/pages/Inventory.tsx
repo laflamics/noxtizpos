@@ -3,9 +3,12 @@ import { useStore } from '@/store/useStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Minus, TrendingUp, TrendingDown, Package, Calendar, FileText, X, Search } from 'lucide-react';
 import type { StockMovement, InventoryReport } from '@/types';
+import LicenseCountdownBadge from '@/components/LicenseCountdownBadge';
+import { useNotification } from '@/components/NotificationProvider';
 
 export default function Inventory() {
   const { products, loadProducts, currentUser, storage } = useStore();
+  const { notify } = useNotification();
   const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
   const [inventoryReport, setInventoryReport] = useState<InventoryReport[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState(() => {
@@ -103,7 +106,11 @@ export default function Inventory() {
       }
     } catch (error) {
       console.error('Failed to create stock movement:', error);
-      alert('Gagal menambahkan stok masuk');
+      notify({
+        type: 'error',
+        title: 'Stock in gagal',
+        message: 'Gagal menambahkan stok masuk. Coba lagi bentar.',
+      });
     }
   };
 
@@ -116,7 +123,11 @@ export default function Inventory() {
     const reason = formData.get('reason') as string;
 
     if (quantity > selectedProduct.stock) {
-      alert('Stok tidak mencukupi!');
+      notify({
+        type: 'warning',
+        title: 'Stok kurang',
+        message: 'Jumlah keluar lebih besar dari stok tersedia.',
+      });
       return;
     }
 
@@ -165,7 +176,11 @@ export default function Inventory() {
       }
     } catch (error) {
       console.error('Failed to create stock movement:', error);
-      alert('Gagal mengurangi stok');
+      notify({
+        type: 'error',
+        title: 'Stock out gagal',
+        message: 'Gagal mengurangi stok. Coba ulangi.',
+      });
     }
   };
 
@@ -223,7 +238,11 @@ export default function Inventory() {
       }
     } catch (error) {
       console.error('Failed to create stock movement:', error);
-      alert('Gagal adjust stok');
+      notify({
+        type: 'error',
+        title: 'Penyesuaian stok gagal',
+        message: 'Gagal melakukan penyesuaian stok.',
+      });
     }
   };
 
@@ -245,7 +264,11 @@ export default function Inventory() {
       }
     } catch (error) {
       console.error('Failed to set opening stock:', error);
-      alert('Gagal set stok awal');
+      notify({
+        type: 'error',
+        title: 'Stok awal gagal',
+        message: 'Gagal menyimpan stok awal produk.',
+      });
     }
   };
 
@@ -275,7 +298,8 @@ export default function Inventory() {
           </h1>
           <p style={{ color: '#a0a0b0', fontSize: '16px' }}>Kelola stok masuk, keluar, dan laporan inventory</p>
         </div>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
+          <LicenseCountdownBadge />
           <button
             className="btn btn-primary"
             onClick={() => {

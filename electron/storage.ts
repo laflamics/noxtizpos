@@ -1,5 +1,101 @@
 import Store from 'electron-store';
-import type { User, Product, Category, Order, AppSettings, StockMovement, InventoryReport, Table, ActivityLog, ActivityCategory } from './types';
+import type {
+  User,
+  Product,
+  Category,
+  Order,
+  AppSettings,
+  StockMovement,
+  InventoryReport,
+  Table,
+  ActivityLog,
+  ActivityCategory,
+  StorageSnapshot,
+  SnapshotImportOptions,
+  SyncReport,
+  SyncEntityStats,
+} from './types';
+
+type SnapshotCollectionKey = Exclude<keyof StorageSnapshot, 'generatedAt'>;
+
+const defaultImportOptions: SnapshotImportOptions = { mode: 'insert_only' };
+
+function createEmptyStats(): SyncEntityStats {
+  return { inserted: 0, updated: 0, skipped: 0 };
+}
+
+function createEmptyReport(): SyncReport {
+  const stats = createEmptyStats();
+  return {
+    startedAt: new Date().toISOString(),
+    finishedAt: new Date().toISOString(),
+    totalInserted: 0,
+    entities: {
+      users: { ...stats },
+      products: { ...stats },
+      categories: { ...stats },
+      orders: { ...stats },
+      stockMovements: { ...stats },
+      tables: { ...stats },
+      activityLogs: { ...stats },
+    },
+  };
+}
+
+function finalizeReport(report: SyncReport): SyncReport {
+  report.finishedAt = new Date().toISOString();
+  report.totalInserted = Object.values(report.entities).reduce((sum, entity) => sum + entity.inserted, 0);
+  return report;
+}
+
+function normalizeSnapshot(snapshot?: StorageSnapshot): StorageSnapshot {
+  return {
+    generatedAt: snapshot?.generatedAt ?? new Date().toISOString(),
+    users: snapshot?.users ?? [],
+    products: snapshot?.products ?? [],
+    categories: snapshot?.categories ?? [],
+    orders: snapshot?.orders ?? [],
+    stockMovements: snapshot?.stockMovements ?? [],
+    tables: snapshot?.tables ?? [],
+    activityLogs: snapshot?.activityLogs ?? [],
+  };
+}
+
+function mergeCollection<T extends { id: string }>(
+  existing: T[],
+  incoming: T[],
+  options: SnapshotImportOptions = defaultImportOptions
+): { data: T[]; stats: SyncEntityStats } {
+  const mode = options.mode ?? 'insert_only';
+  const map = new Map(existing.map(item => [item.id, item]));
+  let inserted = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  for (const item of incoming) {
+    if (!item?.id) {
+      skipped++;
+      continue;
+    }
+    if (!map.has(item.id)) {
+      map.set(item.id, item);
+      inserted++;
+      continue;
+    }
+    if (mode === 'upsert') {
+      const current = map.get(item.id)!;
+      map.set(item.id, { ...current, ...item });
+      updated++;
+    } else {
+      skipped++;
+    }
+  }
+
+  return {
+    data: Array.from(map.values()),
+    stats: { inserted, updated, skipped },
+  };
+}
 
 const store = new Store({
   name: 'noxtiz-pos-data',
@@ -414,6 +510,43 @@ export const storageAPI = {
     const count = logs.length;
     store.set('activityLogs', []);
     return count;
+  },
+
+  exportSnapshot: (): StorageSnapshot => ({
+    generatedAt: new Date().toISOString(),
+    users: storageAPI.getUsers(),
+    products: storageAPI.getProducts(),
+    categories: storageAPI.getCategories(),
+    orders: storageAPI.getOrders(),
+    stockMovements: storageAPI.getStockMovements(),
+    tables: storageAPI.getTables(),
+    activityLogs: storageAPI.getActivityLogs(),
+  }),
+
+  importSnapshot: (snapshot: StorageSnapshot, options?: SnapshotImportOptions): SyncReport => {
+    const normalized = normalizeSnapshot(snapshot);
+    const report = createEmptyReport();
+
+    const mergeAndStore = <T extends { id: string }>(
+      key: SnapshotCollectionKey,
+      storeKey: string,
+      incoming: T[]
+    ) => {
+      const existing = store.get(storeKey, []) as T[];
+      const merged = mergeCollection(existing, incoming, options);
+      store.set(storeKey, merged.data);
+      report.entities[key] = merged.stats;
+    };
+
+    mergeAndStore('users', 'users', normalized.users);
+    mergeAndStore('products', 'products', normalized.products);
+    mergeAndStore('categories', 'categories', normalized.categories);
+    mergeAndStore('orders', 'orders', normalized.orders);
+    mergeAndStore('stockMovements', 'stockMovements', normalized.stockMovements);
+    mergeAndStore('tables', 'tables', normalized.tables);
+    mergeAndStore('activityLogs', 'activityLogs', normalized.activityLogs);
+
+    return finalizeReport(report);
   },
 };
 

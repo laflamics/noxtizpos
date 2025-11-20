@@ -3,11 +3,14 @@ import { useStore } from '@/store/useStore';
 import { motion } from 'framer-motion';
 import { TrendingUp, Package, ShoppingCart, DollarSign, BarChart3, Calendar, Printer, Download } from 'lucide-react';
 import jsPDF from 'jspdf';
+import LicenseCountdownBadge from '@/components/LicenseCountdownBadge';
+import { useNotification } from '@/components/NotificationProvider';
 
 type PeriodFilter = 'today' | 'yesterday' | 'thisMonth' | 'custom';
 
 export default function Dashboard() {
   const { orders, products, categories, loadOrders, loadProducts, loadCategories, currentUser, settings } = useStore();
+  const { notify } = useNotification();
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('today');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
@@ -674,7 +677,11 @@ export default function Dashboard() {
         URL.revokeObjectURL(url);
       } catch (e) {
         console.error('Error saving PDF:', e);
-        alert('Gagal menyimpan PDF. Silakan coba lagi.');
+        notify({
+          type: 'error',
+          title: 'Export PDF gagal',
+          message: 'PDF belum kesave. Coba ulang sebentar lagi.',
+        });
       }
     }
   };
@@ -700,7 +707,8 @@ export default function Dashboard() {
               Selamat datang, {currentUser?.username}! 👨‍🍳
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <LicenseCountdownBadge />
             <button className="btn btn-secondary" onClick={handlePrint}>
               <Printer size={18} />
               Print

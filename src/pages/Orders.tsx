@@ -3,9 +3,12 @@ import { useStore } from '@/store/useStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, Calendar, X, Printer, Share2, Download, Mail, MessageCircle, Copy, FileText, Smartphone } from 'lucide-react';
 import type { Order } from '@/types';
+import { useNotification } from '@/components/NotificationProvider';
+import LicenseCountdownBadge from '@/components/LicenseCountdownBadge';
 
 export default function Orders() {
   const { orders, loadOrders, settings } = useStore();
+  const { notify } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState('');
@@ -32,20 +35,23 @@ export default function Orders() {
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '32px' }}>
-        <h1
-          style={{
-            fontSize: '32px',
-            fontWeight: 800,
-            marginBottom: '8px',
-            background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}
-        >
-          Pesanan
-        </h1>
-        <p style={{ color: '#a0a0b0', fontSize: '16px' }}>Riwayat transaksi dan pesanan</p>
+      <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+        <div>
+          <h1
+            style={{
+              fontSize: '32px',
+              fontWeight: 800,
+              marginBottom: '8px',
+              background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >
+            Pesanan
+          </h1>
+          <p style={{ color: '#a0a0b0', fontSize: '16px' }}>Riwayat transaksi dan pesanan</p>
+        </div>
+        <LicenseCountdownBadge />
       </div>
 
       <div
@@ -534,10 +540,18 @@ export default function Orders() {
                     try {
                       const receiptContent = generateReceiptContent(selectedOrder, settings);
                       await navigator.clipboard.writeText(receiptContent);
-                      alert('Struk disalin ke clipboard!');
+                      notify({
+                        type: 'success',
+                        title: 'Struk Tersalin',
+                        message: 'Konten struk sudah masuk clipboard.',
+                      });
                       setShowShareModal(false);
                     } catch (error) {
-                      alert('Gagal menyalin ke clipboard');
+                      notify({
+                        type: 'error',
+                        title: 'Copy Struk Gagal',
+                        message: 'Clipboard tidak bisa diakses. Coba ulangi.',
+                      });
                     }
                   }}
                   style={{ justifyContent: 'flex-start', padding: '16px' }}

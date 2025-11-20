@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useStore } from '@/store/useStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit, Trash2, Search, X, Shield, User, UserCheck } from 'lucide-react';
+import LicenseCountdownBadge from '@/components/LicenseCountdownBadge';
+import { useNotification } from '@/components/NotificationProvider';
 
 // Available menu permissions
 const MENU_PERMISSIONS = [
@@ -22,6 +24,7 @@ const DEFAULT_CASHIER_PERMISSIONS = ['/pos', '/products', '/inventory', '/tables
 
 export default function Users() {
   const { users, loadUsers, createUser, updateUser, deleteUser, currentUser, storage } = useStore();
+  const { notify } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -133,13 +136,21 @@ export default function Users() {
       (e.target as HTMLFormElement).reset();
     } catch (error) {
       console.error('Failed to save user:', error);
-      alert('Gagal menyimpan user');
+      notify({
+        type: 'error',
+        title: 'Simpan user gagal',
+        message: 'Data user belum tersimpan. Coba lagi ya.',
+      });
     }
   };
 
   const handleDelete = async (id: string) => {
     if (id === currentUser?.id) {
-      alert('Tidak bisa menghapus user yang sedang login');
+      notify({
+        type: 'warning',
+        title: 'Aksi tidak diizinkan',
+        message: 'Kamu nggak bisa hapus akun yang lagi dipakai.',
+      });
       return;
     }
     if (confirm('Yakin ingin menghapus user ini?')) {
@@ -164,7 +175,11 @@ export default function Users() {
         }
       } catch (error) {
         console.error('Failed to delete user:', error);
-        alert('Gagal menghapus user');
+        notify({
+          type: 'error',
+          title: 'Hapus user gagal',
+          message: 'User belum terhapus. Coba beberapa saat lagi.',
+        });
       }
     }
   };
@@ -209,16 +224,19 @@ export default function Users() {
           </h1>
           <p style={{ color: '#a0a0b0', fontSize: '16px' }}>Kelola pengguna sistem</p>
         </div>
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            setEditingUser(null);
-            setShowModal(true);
-          }}
-        >
-          <Plus size={18} />
-          Tambah User
-        </button>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <LicenseCountdownBadge />
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              setEditingUser(null);
+              setShowModal(true);
+            }}
+          >
+            <Plus size={18} />
+            Tambah User
+          </button>
+        </div>
       </div>
 
       <div style={{ marginBottom: '24px', position: 'relative' }}>

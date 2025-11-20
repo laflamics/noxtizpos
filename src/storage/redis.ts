@@ -1,8 +1,40 @@
 import { Redis } from '@upstash/redis';
 import type { IStorage } from './base';
-import type { User, Product, Category, Order, AppSettings, StockMovement, InventoryReport, Table, ActivityLog, ActivityCategory } from '@/types';
+import type {
+  User,
+  Product,
+  Category,
+  Order,
+  AppSettings,
+  StockMovement,
+  InventoryReport,
+  Table,
+  ActivityLog,
+  ActivityCategory,
+  StorageSnapshot,
+  SnapshotImportOptions,
+  SyncReport,
+} from '@/types';
+import {
+  createEmptySyncReport,
+  finalizeReport,
+  mergeCollection,
+  normalizeSnapshot,
+  type SnapshotCollectionKey,
+  type Entity,
+} from './snapshotUtils';
+
+interface ChunkMeta {
+  version: 'chunked';
+  kind: 'array' | 'string';
+  chunks: number;
+}
 
 export class RedisStorage implements IStorage {
+  private readonly MAX_PAYLOAD_SIZE = 600_000; // ~0.6 MB buffer for 1MB Upstash limit
+  private readonly CHUNK_META_SUFFIX = '__meta';
+  private readonly CHUNK_KEY_PREFIX = '__chunk__';
+
   private redis: Redis | null = null;
   private redisUrl: string;
   private redisToken: string;
@@ -13,6 +45,7 @@ export class RedisStorage implements IStorage {
     this.redis = new Redis({
       url: url,
       token: token,
+      enableAutoPipelining: false,
     });
   }
 
@@ -21,6 +54,7 @@ export class RedisStorage implements IStorage {
       this.redis = new Redis({
         url: this.redisUrl,
         token: this.redisToken,
+        enableAutoPipelining: false,
       });
     }
 
@@ -62,15 +96,214 @@ export class RedisStorage implements IStorage {
     }
   }
 
-  private async getKey(key: string): Promise<any[]> {
-    if (!this.redis) throw new Error('Redis not initialized');
-    const data = await this.redis.get(key);
-    return data ? (Array.isArray(data) ? data : []) : [];
+  private buildMetaKey(key: string): string {
+    return `${key}:${this.CHUNK_META_SUFFIX}`;
   }
 
-  private async setKey(key: string, value: any[]): Promise<void> {
+  private buildChunkKey(key: string, index: number): string {
+    return `${key}:${this.CHUNK_KEY_PREFIX}${index}`;
+  }
+
+  private async getChunkMeta(key: string): Promise<ChunkMeta | null> {
     if (!this.redis) throw new Error('Redis not initialized');
-    await this.redis.set(key, value);
+    const meta = await this.redis.get(this.buildMetaKey(key));
+    if (meta && typeof meta === 'object' && (meta as ChunkMeta).version === 'chunked') {
+      return meta as ChunkMeta;
+    }
+    return null;
+  }
+
+  private async clearChunks(key: string, providedMeta?: ChunkMeta | null): Promise<void> {
+    if (!this.redis) throw new Error('Redis not initialized');
+    const meta = providedMeta ?? (await this.getChunkMeta(key));
+    if (meta) {
+      for (let i = 0; i < meta.chunks; i++) {
+        await this.redis.del(this.buildChunkKey(key, i));
+      }
+    }
+    await this.redis.del(this.buildMetaKey(key));
+  }
+
+  private async readChunkedArray(key: string, meta: ChunkMeta): Promise<any[]> {
+    const aggregated: any[] = [];
+    for (let i = 0; i < meta.chunks; i++) {
+      const chunk = await this.redis!.get(this.buildChunkKey(key, i));
+      if (Array.isArray(chunk)) {
+        aggregated.push(...chunk);
+      } else if (typeof chunk === 'string') {
+        try {
+          const parsed = JSON.parse(chunk);
+          if (Array.isArray(parsed)) {
+            aggregated.push(...parsed);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+    return aggregated;
+  }
+
+  private async readChunkedString(key: string, meta: ChunkMeta): Promise<string> {
+    let result = '';
+    for (let i = 0; i < meta.chunks; i++) {
+      const chunk = await this.redis!.get(this.buildChunkKey(key, i));
+      if (typeof chunk === 'string') {
+        result += chunk;
+      } else if (Array.isArray(chunk) || typeof chunk === 'object') {
+        result += JSON.stringify(chunk);
+      }
+    }
+    return result;
+  }
+
+  private async setChunkedString(key: string, value: string | null): Promise<void> {
+    if (!this.redis) throw new Error('Redis not initialized');
+    if (!value) {
+      await this.clearChunks(key);
+      await this.redis.del(key);
+      return;
+    }
+    if (value.length <= this.MAX_PAYLOAD_SIZE) {
+      await this.clearChunks(key);
+      await this.redis.set(key, value);
+      return;
+    }
+    const chunks = Math.ceil(value.length / this.MAX_PAYLOAD_SIZE);
+    await this.clearChunks(key);
+    await this.redis.del(key);
+    for (let i = 0; i < chunks; i++) {
+      const slice = value.slice(i * this.MAX_PAYLOAD_SIZE, (i + 1) * this.MAX_PAYLOAD_SIZE);
+      await this.redis.set(this.buildChunkKey(key, i), slice);
+    }
+    await this.redis.set(this.buildMetaKey(key), { version: 'chunked', kind: 'string', chunks });
+    console.log(`[RedisStorage] Key ${key} (string) displit jadi ${chunks} chunk`);
+  }
+
+  private async setJsonValue(key: string, value: any): Promise<void> {
+    const serialized = JSON.stringify(value);
+    await this.setChunkedString(key, serialized);
+  }
+
+  private async getJsonValue<T>(key: string): Promise<T | null> {
+    if (!this.redis) throw new Error('Redis not initialized');
+    const meta = await this.getChunkMeta(key);
+    if (meta && meta.kind === 'string') {
+      const raw = await this.readChunkedString(key, meta);
+      try {
+        return JSON.parse(raw) as T;
+      } catch {
+        return null;
+      }
+    }
+    if (meta && meta.kind === 'array') {
+      const aggregated = await this.readChunkedArray(key, meta);
+      return aggregated as T;
+    }
+    const data = await this.redis.get(key);
+    if (typeof data === 'string') {
+      try {
+        return JSON.parse(data) as T;
+      } catch {
+        return null;
+      }
+    }
+    return (data ?? null) as T | null;
+  }
+
+  private chunkArray<T>(value: T[]): T[][] {
+    const chunks: T[][] = [];
+    let current: T[] = [];
+    let currentSize = 2; // account for []
+
+    for (const item of value) {
+      const itemString = JSON.stringify(item);
+      const itemSize = itemString.length + 1; // comma
+
+      if (current.length && currentSize + itemSize > this.MAX_PAYLOAD_SIZE) {
+        chunks.push(current);
+        current = [];
+        currentSize = 2;
+      }
+
+      current.push(item);
+      currentSize += itemSize;
+    }
+
+    if (current.length) {
+      chunks.push(current);
+    }
+
+    return chunks;
+  }
+
+  private async getKey<T>(key: string): Promise<T[]> {
+    if (!this.redis) throw new Error('Redis not initialized');
+    try {
+      const meta = await this.getChunkMeta(key);
+      if (meta && meta.kind === 'array') {
+        return (await this.readChunkedArray(key, meta)) as T[];
+      }
+      if (meta && meta.kind === 'string') {
+        const raw = await this.readChunkedString(key, meta);
+        try {
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? (parsed as T[]) : [];
+        } catch {
+          console.warn(`[RedisStorage] Gagal parse chunk string untuk ${key}, reset array`);
+          await this.clearChunks(key, meta);
+          await this.redis!.del(key);
+          return [];
+        }
+      }
+
+      const data = await this.redis.get(key);
+      if (data && !Array.isArray(data)) {
+        console.warn(`[RedisStorage] Key ${key} tipe beda, reset ke array[]`);
+        await this.redis.del(key);
+        return [];
+      }
+      return (data as T[]) ?? [];
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('WRONGTYPE')) {
+        console.warn(`[RedisStorage] Key ${key} WRONGTYPE, reset ke array[]`);
+        await this.clearChunks(key);
+        await this.redis!.del(key);
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  private async setKey<T>(key: string, value: T[]): Promise<void> {
+    if (!this.redis) throw new Error('Redis not initialized');
+    const serializedLength = JSON.stringify(value).length;
+
+    if (serializedLength <= this.MAX_PAYLOAD_SIZE) {
+      await this.clearChunks(key);
+      try {
+        await this.redis.set(key, value);
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('WRONGTYPE')) {
+          console.warn(`[RedisStorage] Key ${key} tipe beda saat set, force reset`);
+          await this.redis.del(key);
+          await this.redis.set(key, value);
+          return;
+        }
+        throw error;
+      }
+      return;
+    }
+
+    const chunks = this.chunkArray(value);
+    await this.clearChunks(key);
+    await this.redis.del(key);
+
+    for (let i = 0; i < chunks.length; i++) {
+      await this.redis.set(this.buildChunkKey(key, i), chunks[i]);
+    }
+    await this.redis.set(this.buildMetaKey(key), { version: 'chunked', kind: 'array', chunks: chunks.length });
+    console.log(`[RedisStorage] Key ${key} displit jadi ${chunks.length} chunk biar aman <1MB`);
   }
 
   // Users
@@ -224,8 +457,32 @@ export class RedisStorage implements IStorage {
 
   // Settings
   async getSettings(): Promise<AppSettings> {
-    const settings = await this.redis?.get('settings');
-    if (settings) return settings as AppSettings;
+    const settings = await this.getJsonValue<AppSettings>('settings');
+    if (settings) {
+      return {
+        storageType: settings.storageType ?? 'redis',
+        taxRate: settings.taxRate ?? 0.1,
+        taxDisplayMode: settings.taxDisplayMode ?? 'include_hide',
+        currency: settings.currency ?? 'IDR',
+        companyName: settings.companyName ?? 'Noxtiz Culinary Lab',
+        voidPin: settings.voidPin ?? '',
+        redisUrl: settings.redisUrl,
+        redisToken: settings.redisToken,
+        receiptHeader: settings.receiptHeader,
+        receiptFooter: settings.receiptFooter,
+        autoSyncIntervalHours: settings.autoSyncIntervalHours,
+        lastSyncedAt: settings.lastSyncedAt,
+        lastSyncDirection: settings.lastSyncDirection,
+        licenseCode: settings.licenseCode,
+        licenseToken: settings.licenseToken,
+        licenseType: settings.licenseType,
+        licenseStatus: settings.licenseStatus,
+        licenseExpiresAt: settings.licenseExpiresAt,
+        licenseLastSyncedAt: settings.licenseLastSyncedAt,
+        licenseDeviceId: settings.licenseDeviceId,
+        licenseMessage: settings.licenseMessage,
+      };
+    }
     return {
       storageType: 'redis',
       taxRate: 0.1,
@@ -240,7 +497,10 @@ export class RedisStorage implements IStorage {
     const current = await this.getSettings();
     const updated = { ...current, ...settings };
     if (this.redis) {
-      await this.redis.set('settings', updated);
+      const { receiptLogo, ...rest } = updated;
+      await this.setJsonValue('settings', rest);
+      await this.clearChunks('settings:receiptLogo');
+      await this.redis.del('settings:receiptLogo');
     }
     return updated;
   }
@@ -488,6 +748,74 @@ export class RedisStorage implements IStorage {
     const count = logs.length;
     await this.setKey('activityLogs', []);
     return count;
+  }
+
+  async exportSnapshot(): Promise<StorageSnapshot> {
+    const [users, products, categories, orders, stockMovements, tables, activityLogs] = await Promise.all([
+      this.getUsers(),
+      this.getProducts(),
+      this.getCategories(),
+      this.getOrders(),
+      this.getStockMovements(),
+      this.getTables(),
+      this.getActivityLogs(),
+    ]);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      users,
+      products,
+      categories,
+      orders,
+      stockMovements,
+      tables,
+      activityLogs,
+    };
+  }
+
+  async importSnapshot(
+    snapshot: StorageSnapshot,
+    options?: SnapshotImportOptions
+  ): Promise<SyncReport> {
+    const normalized = normalizeSnapshot(snapshot);
+    const report = createEmptySyncReport();
+
+    const mergeAndStore = async <T extends Entity>(
+      key: SnapshotCollectionKey,
+      getter: () => Promise<T[]>,
+      setter: (data: T[]) => Promise<void>,
+      incoming: T[]
+    ) => {
+      const existing = await getter();
+      const merged = mergeCollection<T>(existing, incoming, options);
+      await setter(merged.data);
+      report.entities[key] = merged.stats;
+    };
+
+    await mergeAndStore<User>('users', () => this.getUsers(), data => this.setKey('users', data), normalized.users);
+    await mergeAndStore<Product>('products', () => this.getProducts(), data => this.setKey('products', data), normalized.products);
+    await mergeAndStore<Category>(
+      'categories',
+      () => this.getCategories(),
+      data => this.setKey('categories', data),
+      normalized.categories
+    );
+    await mergeAndStore<Order>('orders', () => this.getOrders(), data => this.setKey('orders', data), normalized.orders);
+    await mergeAndStore<StockMovement>(
+      'stockMovements',
+      () => this.getStockMovements(),
+      data => this.setKey('stockMovements', data),
+      normalized.stockMovements
+    );
+    await mergeAndStore<Table>('tables', () => this.getTables(), data => this.setKey('tables', data), normalized.tables);
+    await mergeAndStore<ActivityLog>(
+      'activityLogs',
+      () => this.getActivityLogs(),
+      data => this.setKey('activityLogs', data),
+      normalized.activityLogs
+    );
+
+    return finalizeReport(report);
   }
 }
 

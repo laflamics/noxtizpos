@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import { motion } from 'framer-motion';
-import { Calendar, Download, Printer, FileText, DollarSign, CreditCard, QrCode, Wallet, Banknote, TrendingUp, CheckCircle, AlertCircle, Lock, X } from 'lucide-react';
-import type { Order } from '@/types';
+import { Download, Printer, FileText, DollarSign, CreditCard, QrCode, Wallet, Banknote, TrendingUp, CheckCircle, AlertCircle, Lock } from 'lucide-react';
+import LicenseCountdownBadge from '@/components/LicenseCountdownBadge';
+import { useNotification } from '@/components/NotificationProvider';
 
 interface PaymentSummary {
   method: string;
@@ -14,6 +15,7 @@ interface PaymentSummary {
 
 export default function ClosingReport() {
   const { orders, loadOrders, settings, currentUser, storage } = useStore();
+  const { notify } = useNotification();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
@@ -219,7 +221,11 @@ export default function ClosingReport() {
 
   const handleClose = async () => {
     if (!allPaymentMethodsFilled) {
-      alert('Harap isi semua actual amount untuk setiap metode pembayaran terlebih dahulu!');
+      notify({
+        type: 'warning',
+        title: 'Lengkapi nominal',
+        message: 'Isi actual amount untuk semua metode pembayaran dulu ya.',
+      });
       return;
     }
 
@@ -326,25 +332,32 @@ export default function ClosingReport() {
       handleDownload();
     }
 
-    alert('Closing berhasil! Laporan settlement telah dicetak.');
+    notify({
+      type: 'success',
+      title: 'Closing selesai',
+      message: 'Settlement berhasil dicetak/didownload.',
+    });
   };
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', paddingBottom: '40px' }}>
-      <div style={{ marginBottom: '32px' }}>
-        <h1
-          style={{
-            fontSize: '32px',
-            fontWeight: 800,
-            marginBottom: '8px',
-            background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}
-        >
-          Closing Report
-        </h1>
-        <p style={{ color: '#a0a0b0', fontSize: '16px' }}>Settlement harian dan bulanan</p>
+      <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+        <div>
+          <h1
+            style={{
+              fontSize: '32px',
+              fontWeight: 800,
+              marginBottom: '8px',
+              background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >
+            Closing Report
+          </h1>
+          <p style={{ color: '#a0a0b0', fontSize: '16px' }}>Settlement harian dan bulanan</p>
+        </div>
+        <LicenseCountdownBadge />
       </div>
 
       {/* Filters */}
@@ -492,7 +505,6 @@ export default function ClosingReport() {
             paymentSummaries.map((summary) => {
               const Icon = summary.icon;
               const percentage = totals.totalRevenue > 0 ? (summary.total / totals.totalRevenue) * 100 : 0;
-              const actual = parseFloat(actualAmounts[summary.method] || '0');
               const difference = paymentDifferences[summary.method] || 0;
               const hasDifference = Math.abs(difference) > 0.01;
               

@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
+import LicenseOverlay from '@/components/LicenseOverlay';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -18,6 +19,8 @@ import {
   History,
   Receipt,
   Book,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -30,6 +33,7 @@ export default function Layout({ children }: LayoutProps) {
   const { currentUser, setCurrentUser } = useStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -39,6 +43,12 @@ export default function Layout({ children }: LayoutProps) {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  useEffect(() => {
+    if (isMobile) {
+      setIsSidebarCollapsed(false);
+    }
+  }, [isMobile]);
 
   const handleLogout = () => {
     setCurrentUser(null);
@@ -92,42 +102,92 @@ export default function Layout({ children }: LayoutProps) {
     return false;
   });
 
-  const SidebarContent = () => (
-    <>
-      <div style={{ marginBottom: '32px' }}>
+  const SidebarContent = ({
+    collapsed,
+    showToggle,
+    onToggle,
+  }: {
+    collapsed: boolean;
+    showToggle: boolean;
+    onToggle: () => void;
+  }) => (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ marginBottom: '24px' }}>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
+            justifyContent: showToggle ? 'space-between' : 'center',
             gap: '12px',
-            marginBottom: '24px',
           }}
         >
-          <img
-            src="/Logo.gif"
-            alt="Noxtiz POS"
+          <div
             style={{
-              width: '48px',
-              height: '48px',
-              objectFit: 'contain',
+              display: 'flex',
+              alignItems: 'center',
+              gap: collapsed ? 0 : '12px',
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              flex: 1,
             }}
-          />
-          <div>
-            <h1
+          >
+            <img
+              src="/Logo.gif"
+              alt="Noxtiz POS"
               style={{
-                fontSize: '20px',
-                fontWeight: 800,
-                background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
+                width: collapsed ? '36px' : '48px',
+                height: collapsed ? '36px' : '48px',
+                objectFit: 'contain',
               }}
-            >
-              Noxtiz POS
-            </h1>
-            <p style={{ fontSize: '12px', color: '#606070' }}>Culinary Lab</p>
+            />
+            {!collapsed && (
+              <div>
+                <h1
+                  style={{
+                    fontSize: '20px',
+                    fontWeight: 800,
+                    background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
+                >
+                  Noxtiz POS
+                </h1>
+                <p style={{ fontSize: '12px', color: '#606070' }}>Culinary Lab</p>
+              </div>
+            )}
           </div>
+          {showToggle && (
+            <button
+              className="btn btn-secondary"
+              onClick={onToggle}
+              style={{
+                padding: '8px',
+                minWidth: 'auto',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label={collapsed ? 'Buka sidebar' : 'Tutup sidebar'}
+            >
+              {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            </button>
+          )}
         </div>
       </div>
+
+      {!collapsed && (
+        <p
+          style={{
+            textTransform: 'uppercase',
+            fontSize: '11px',
+            letterSpacing: '1px',
+            color: '#606070',
+            marginBottom: '12px',
+          }}
+        >
+          Menu Utama
+        </p>
+      )}
 
       <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {navItems.map((item) => {
@@ -141,12 +201,13 @@ export default function Layout({ children }: LayoutProps) {
               onClick={() => isMobile && setIsMobileMenuOpen(false)}
             >
               <motion.div
-                whileHover={{ x: 4 }}
+                whileHover={{ x: collapsed ? 0 : 4 }}
                 whileTap={{ scale: 0.98 }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
+                  justifyContent: collapsed ? 'center' : 'flex-start',
+                  gap: collapsed ? 0 : '12px',
                   padding: '12px 16px',
                   borderRadius: '8px',
                   background: isActive ? 'rgba(0, 255, 136, 0.1)' : 'transparent',
@@ -155,42 +216,65 @@ export default function Layout({ children }: LayoutProps) {
                   transition: 'all 0.2s ease',
                   cursor: 'pointer',
                 }}
+                title={collapsed ? item.label : undefined}
               >
                 <Icon size={20} />
-                <span style={{ fontWeight: isActive ? 600 : 400 }}>{item.label}</span>
+                {!collapsed && (
+                  <span style={{ fontWeight: isActive ? 600 : 400 }}>{item.label}</span>
+                )}
               </motion.div>
             </Link>
           );
         })}
       </nav>
 
-      <div style={{ marginTop: 'auto', paddingTop: '24px', paddingBottom: '24px', borderTop: '1px solid var(--border-color)', flexShrink: 0 }}>
-        <div
-          style={{
-            padding: '12px 16px',
-            marginBottom: '12px',
-            background: 'var(--bg-tertiary)',
-            borderRadius: '8px',
-            fontSize: '14px',
-          }}
-        >
-          <p style={{ color: '#a0a0b0', fontSize: '12px', marginBottom: '4px' }}>Logged in as</p>
-          <p style={{ fontWeight: 600, color: '#00ff88' }}>{currentUser?.username}</p>
-          <p style={{ fontSize: '12px', color: '#606070', textTransform: 'capitalize' }}>
-            {currentUser?.role}
-          </p>
-        </div>
+      <div
+        style={{
+          marginTop: 'auto',
+          paddingTop: '24px',
+          paddingBottom: '24px',
+          borderTop: '1px solid var(--border-color)',
+          flexShrink: 0,
+        }}
+      >
+        {!collapsed && (
+          <div
+            style={{
+              padding: '12px 16px',
+              marginBottom: '12px',
+              background: 'var(--bg-tertiary)',
+              borderRadius: '8px',
+              fontSize: '14px',
+            }}
+          >
+            <p style={{ color: '#a0a0b0', fontSize: '12px', marginBottom: '4px' }}>Logged in as</p>
+            <p style={{ fontWeight: 600, color: '#00ff88' }}>{currentUser?.username}</p>
+            <p style={{ fontSize: '12px', color: '#606070', textTransform: 'capitalize' }}>
+              {currentUser?.role}
+            </p>
+          </div>
+        )}
         <button
           className="btn btn-secondary"
           onClick={handleLogout}
-          style={{ width: '100%', justifyContent: 'center', flexShrink: 0, marginBottom: '0' }}
+          style={{
+            width: '100%',
+            justifyContent: 'center',
+            flexShrink: 0,
+            marginBottom: '0',
+            minHeight: '44px',
+          }}
+          title={collapsed ? 'Logout' : undefined}
         >
           <LogOut size={18} />
-          Logout
+          {!collapsed && <span style={{ marginLeft: '8px' }}>Logout</span>}
         </button>
       </div>
-    </>
+    </div>
   );
+
+  const sidebarWidth = isSidebarCollapsed ? 80 : 260;
+  const contentMaxWidth = isMobile ? '100%' : `calc(100vw - ${sidebarWidth}px)`;
 
   return (
     <div
@@ -252,21 +336,26 @@ export default function Layout({ children }: LayoutProps) {
       {!isMobile ? (
         <aside
           style={{
-            width: '260px',
+            width: `${sidebarWidth}px`,
             background: 'var(--bg-secondary)',
             borderRight: '1px solid var(--border-color)',
             display: 'flex',
             flexDirection: 'column',
-            padding: '24px',
+            padding: isSidebarCollapsed ? '24px 12px' : '24px',
             position: 'sticky',
             top: 0,
             maxHeight: 'calc(100vh - 50px)',
             height: 'calc(100vh - 50px)',
             overflowY: 'auto',
             overflowX: 'hidden',
+            transition: 'width 0.2s ease',
           }}
         >
-          <SidebarContent />
+          <SidebarContent
+            collapsed={isSidebarCollapsed}
+            showToggle={!isMobile}
+            onToggle={() => setIsSidebarCollapsed((prev) => !prev)}
+          />
         </aside>
       ) : (
         <AnimatePresence>
@@ -294,7 +383,7 @@ export default function Layout({ children }: LayoutProps) {
                 zIndex: 99,
               }}
             >
-              <SidebarContent />
+              <SidebarContent collapsed={false} showToggle={false} onToggle={() => {}} />
             </motion.aside>
           )}
         </AnimatePresence>
@@ -307,11 +396,12 @@ export default function Layout({ children }: LayoutProps) {
           padding: isMobile ? '16px' : '32px',
           paddingBottom: isMobile ? '60px' : '60px',
           overflowY: 'auto',
-          maxWidth: isMobile ? '100%' : 'calc(100vw - 260px)',
+          maxWidth: contentMaxWidth,
         }}
       >
         {children}
       </main>
+      <LicenseOverlay />
     </div>
   );
 }

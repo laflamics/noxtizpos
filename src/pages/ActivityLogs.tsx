@@ -3,9 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Filter, Calendar, Search, User, ShoppingCart, Package, Trash2, TrendingUp, Settings, Users, Table2, Warehouse, AlertTriangle, X, CheckCircle } from 'lucide-react';
 import type { ActivityLog, ActivityCategory } from '@/types';
 import { useStore } from '@/store/useStore';
+import { useNotification } from '@/components/NotificationProvider';
+import LicenseCountdownBadge from '@/components/LicenseCountdownBadge';
 
 export default function ActivityLogs() {
   const { storageType, settings } = useStore();
+  const { notify } = useNotification();
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [filteredLogs, setFilteredLogs] = useState<ActivityLog[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<ActivityCategory | 'all'>('all');
@@ -198,14 +201,17 @@ export default function ActivityLogs() {
           </h1>
           <p style={{ color: '#a0a0b0', fontSize: '16px' }}>Riwayat aktivitas sistem</p>
         </div>
-        <button
-          className="btn btn-danger"
-          onClick={() => setShowDeleteModal(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-        >
-          <Trash2 size={18} />
-          Hapus Data
-        </button>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <LicenseCountdownBadge />
+          <button
+            className="btn btn-danger"
+            onClick={() => setShowDeleteModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <Trash2 size={18} />
+            Hapus Data
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -705,12 +711,20 @@ export default function ActivityLogs() {
 
   async function handleDeleteData() {
     if (!deleteDataTypes.orders && !deleteDataTypes.stockMovements && !deleteDataTypes.activityLogs) {
-      alert('Pilih minimal satu jenis data yang akan dihapus!');
+      notify({
+        type: 'warning',
+        title: 'Belum pilih data',
+        message: 'Pilih minimal satu jenis data dulu sebelum hapus.',
+      });
       return;
     }
 
     if (deleteDateRange.useDateRange && (!deleteDateRange.startDate || !deleteDateRange.endDate)) {
-      alert('Isi tanggal mulai dan tanggal akhir!');
+      notify({
+        type: 'warning',
+        title: 'Rentang tanggal belum lengkap',
+        message: 'Isi tanggal mulai dan akhir dulu ya.',
+      });
       return;
     }
 

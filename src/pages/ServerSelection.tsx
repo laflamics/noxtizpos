@@ -3,10 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import { motion } from 'framer-motion';
 import { Server, Database } from 'lucide-react';
+import { useNotification } from '@/components/NotificationProvider';
+import { ensureProcessPolyfill } from '@/polyfills/process';
 
 export default function ServerSelection() {
   const navigate = useNavigate();
   const { switchStorage } = useStore();
+  const { notify } = useNotification();
   const [selected, setSelected] = useState<'local' | 'redis'>('local');
   const [redisUrl, setRedisUrl] = useState('');
   const [redisToken, setRedisToken] = useState('');
@@ -16,9 +19,14 @@ export default function ServerSelection() {
     setIsLoading(true);
     try {
       if (selected === 'redis' && redisUrl && redisToken) {
+        ensureProcessPolyfill();
         // Validate URL format
         if (!redisUrl.startsWith('http://') && !redisUrl.startsWith('https://')) {
-          alert('Redis URL harus dimulai dengan http:// atau https://');
+          notify({
+            type: 'warning',
+            title: 'Redis URL kurang pas',
+            message: 'Redis URL harus diawali http:// atau https://',
+          });
           setIsLoading(false);
           return;
         }
@@ -35,7 +43,13 @@ export default function ServerSelection() {
           console.log('✅ Redis connection test successful');
         } catch (testError) {
           console.error('❌ Redis connection test failed:', testError);
-          alert(`Gagal terhubung ke Redis:\n${testError instanceof Error ? testError.message : 'Unknown error'}\n\nPastikan URL dan Token benar.\n\nContoh format:\nURL: https://just-feline-6702.upstash.io\nToken: ARouAAImcDI5ZTUyMDE5ODlkYmE0Y2I0YTU4OTBiNTg2OTNiMmJjZnAyNjcwMg`);
+          notify({
+            type: 'error',
+            title: 'Tes Redis gagal',
+            message: `Pastikan URL & token valid ya.\nDetail: ${
+              testError instanceof Error ? testError.message : 'Unknown error'
+            }\n\nContoh:\nURL: https://just-feline-6702.upstash.io\nToken: ARouAAImc...`,
+          });
           setIsLoading(false);
           return;
         }
@@ -47,7 +61,11 @@ export default function ServerSelection() {
       navigate('/login');
     } catch (error) {
       console.error('Failed to switch storage:', error);
-      alert(`Gagal menghubungkan ke server:\n${error instanceof Error ? error.message : 'Unknown error'}`);
+      notify({
+        type: 'error',
+        title: 'Gagal ganti server',
+        message: `Detail: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      });
     } finally {
       setIsLoading(false);
     }

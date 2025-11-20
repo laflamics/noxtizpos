@@ -104,6 +104,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteAllOrders: () => ipcRenderer.invoke('storage:deleteAllOrders'),
     deleteAllStockMovements: () => ipcRenderer.invoke('storage:deleteAllStockMovements'),
     deleteAllActivityLogs: () => ipcRenderer.invoke('storage:deleteAllActivityLogs'),
+    exportSnapshot: () => ipcRenderer.invoke('storage:exportSnapshot'),
+    importSnapshot: (snapshot: any, options: any) => ipcRenderer.invoke('storage:importSnapshot', snapshot, options),
   },
 });
 

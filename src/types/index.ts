@@ -3,8 +3,10 @@ export type StorageType = 'local' | 'redis';
 export interface User {
   id: string;
   username: string;
+  name?: string; // Nama lengkap user (optional)
   email: string;
   password?: string; // Password untuk login
+  phone?: string; // Nomor telepon user
   role: string; // Bisa custom role atau 'admin' | 'cashier' | 'manager'
   permissions?: string[]; // Array of menu paths yang bisa diakses
   createdAt: string;
@@ -135,6 +137,25 @@ export interface ActivityLog {
   ipAddress?: string;
 }
 
+export type LicensePlanType = 'trial' | 'weekly' | 'monthly' | 'yearly' | 'lifetime';
+export type LicenseStatusState = 'unknown' | 'trial' | 'active' | 'expired' | 'revoked';
+
+export interface StaffProfile {
+  userId: string;
+  role: string;
+  name: string;
+  username?: string;
+}
+
+export interface AccountProfile {
+  accountId: string;
+  outletName: string;
+  ownerName?: string;
+  ownerPhone?: string;
+  ownerEmail?: string;
+  staff: StaffProfile[];
+}
+
 export interface AppSettings {
   storageType: StorageType;
   redisUrl?: string;
@@ -147,5 +168,54 @@ export interface AppSettings {
   receiptLogo?: string; // Base64 encoded image atau path
   receiptHeader?: string; // Header text untuk receipt (bisa multi-line)
   receiptFooter?: string; // Footer text untuk receipt (bisa multi-line)
+  autoSyncIntervalHours?: number;
+  lastSyncedAt?: string;
+  lastSyncDirection?: 'local_to_redis' | 'redis_to_local';
+  // License metadata
+  licenseCode?: string;
+  licenseToken?: string;
+  licenseType?: LicensePlanType;
+  licenseStatus?: LicenseStatusState;
+  licenseExpiresAt?: string;
+  licenseLastSyncedAt?: string;
+  licenseDeviceId?: string;
+  licenseMessage?: string;
+  licensePendingSync?: boolean;
+}
+
+export interface StorageSnapshot {
+  generatedAt: string;
+  users: User[];
+  products: Product[];
+  categories: Category[];
+  orders: Order[];
+  stockMovements: StockMovement[];
+  tables: Table[];
+  activityLogs: ActivityLog[];
+}
+
+export interface SyncEntityStats {
+  inserted: number;
+  updated: number;
+  skipped: number;
+}
+
+export interface SyncReport {
+  startedAt: string;
+  finishedAt: string;
+  entities: {
+    users: SyncEntityStats;
+    products: SyncEntityStats;
+    categories: SyncEntityStats;
+    orders: SyncEntityStats;
+    stockMovements: SyncEntityStats;
+    tables: SyncEntityStats;
+    activityLogs: SyncEntityStats;
+  };
+  totalInserted: number;
+}
+
+export interface SnapshotImportOptions {
+  mode?: 'insert_only' | 'upsert';
 }
 
