@@ -49,31 +49,69 @@ jobs:
           fi
         continue-on-error: true
       
-      - name: Update iOS deployment target
-        run: |
-          # Update Podfile if exists
-          if [ -f "ios/App/Podfile" ]; then
-            # Update minimum iOS version to 13.0 (required by Capacitor 7+)
-            if grep -q "^platform :ios" ios/App/Podfile; then
-              sed -i.bak "s/^platform :ios, '[^']*'/platform :ios, '13.0'/" ios/App/Podfile
-            else
-              sed -i.bak "1i\\
-platform :ios, '13.0'
-" ios/App/Podfile
-            fi
-            echo "✅ Podfile updated:"
-            grep "platform :ios" ios/App/Podfile
-          fi
-          
-          # Update Xcode project deployment target if project exists
-          if [ -f "ios/App/App.xcodeproj/project.pbxproj" ]; then
-            # Update IPHONEOS_DEPLOYMENT_TARGET to 13.0
-            sed -i.bak "s/IPHONEOS_DEPLOYMENT_TARGET = [^;]*/IPHONEOS_DEPLOYMENT_TARGET = 13.0/g" ios/App/App.xcodeproj/project.pbxproj
-            echo "✅ Xcode project deployment target updated to 13.0"
-          fi
+      - name: Sync iOS (will create Podfile)
+        run: npx cap sync ios || echo "Sync failed, will fix and retry"
       
-      - name: Sync iOS
-        run: npx cap sync ios
+      - name: Update iOS deployment target to 13.0
+        run: |
+          python3 << 'EOF'
+import os
+import re
+import subprocess
+
+# Update Podfile - MUST be 13.0 for Capacitor 7+
+podfile_path = "ios/App/Podfile"
+if os.path.exists(podfile_path):
+    with open(podfile_path, 'r') as f:
+        content = f.read()
+    
+    # Update platform line
+    if re.search(r'^platform :ios', content, re.MULTILINE):
+        content = re.sub(r"^platform :ios, '[^']*'", "platform :ios, '13.0'", content, flags=re.MULTILINE)
+        print("✅ Updated existing platform line")
+    else:
+        content = "platform :ios, '13.0'\n" + content
+        print("✅ Added platform line")
+    
+    with open(podfile_path, 'w') as f:
+        f.write(content)
+    
+    # Verify
+    with open(podfile_path, 'r') as f:
+        if "platform :ios, '13.0'" in f.read():
+            print("✅ Podfile verified: platform :ios, '13.0'")
+        else:
+            print("❌ ERROR: Podfile update failed!")
+            exit(1)
+else:
+    print("❌ ERROR: Podfile not found after sync!")
+    exit(1)
+
+# Update Xcode project
+project_path = "ios/App/App.xcodeproj/project.pbxproj"
+if os.path.exists(project_path):
+    with open(project_path, 'r') as f:
+        content = f.read()
+    
+    old_content = content
+    content = re.sub(
+        r'IPHONEOS_DEPLOYMENT_TARGET = [^;]*',
+        'IPHONEOS_DEPLOYMENT_TARGET = 13.0',
+        content
+    )
+    
+    if old_content != content:
+        with open(project_path, 'w') as f:
+            f.write(content)
+        print("✅ Xcode project updated: IPHONEOS_DEPLOYMENT_TARGET = 13.0")
+    else:
+        print("ℹ️ Xcode project already has IPHONEOS_DEPLOYMENT_TARGET = 13.0")
+EOF
+      
+      - name: Install CocoaPods with updated Podfile
+        run: |
+          cd ios/App
+          pod install --repo-update
       
       - name: Build iOS (Xcode)
         run: |
