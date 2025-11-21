@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-Update iOS deployment target to 13.0 for Capacitor 7+
+Update iOS deployment target to 14.0 for Capacitor 7.4+
+Capacitor 7.4+ requires iOS 14.0 or higher
 """
 import os
 import re
 import sys
 
-# Update Podfile - MUST be 13.0 for Capacitor 7+
+# Update Podfile - MUST be 14.0 for Capacitor 7.4+
+DEPLOYMENT_TARGET = "14.0"
+
 podfile_path = "ios/App/Podfile"
 if os.path.exists(podfile_path):
     with open(podfile_path, 'r') as f:
@@ -14,19 +17,19 @@ if os.path.exists(podfile_path):
     
     # Update platform line
     if re.search(r'^platform :ios', content, re.MULTILINE):
-        content = re.sub(r"^platform :ios, '[^']*'", "platform :ios, '13.0'", content, flags=re.MULTILINE)
-        print("✅ Updated existing platform line")
+        content = re.sub(r"^platform :ios, '[^']*'", f"platform :ios, '{DEPLOYMENT_TARGET}'", content, flags=re.MULTILINE)
+        print(f"✅ Updated existing platform line to {DEPLOYMENT_TARGET}")
     else:
-        content = "platform :ios, '13.0'\n" + content
-        print("✅ Added platform line")
+        content = f"platform :ios, '{DEPLOYMENT_TARGET}'\n" + content
+        print(f"✅ Added platform line: {DEPLOYMENT_TARGET}")
     
     with open(podfile_path, 'w') as f:
         f.write(content)
     
     # Verify
     with open(podfile_path, 'r') as f:
-        if "platform :ios, '13.0'" in f.read():
-            print("✅ Podfile verified: platform :ios, '13.0'")
+        if f"platform :ios, '{DEPLOYMENT_TARGET}'" in f.read():
+            print(f"✅ Podfile verified: platform :ios, '{DEPLOYMENT_TARGET}'")
         else:
             print("❌ ERROR: Podfile update failed!")
             sys.exit(1)
@@ -50,16 +53,16 @@ if os.path.exists(project_path):
     old_content = content
     content = re.sub(
         r'IPHONEOS_DEPLOYMENT_TARGET = [^;]*',
-        'IPHONEOS_DEPLOYMENT_TARGET = 13.0',
+        f'IPHONEOS_DEPLOYMENT_TARGET = {DEPLOYMENT_TARGET}',
         content
     )
     
     if old_content != content:
         with open(project_path, 'w') as f:
             f.write(content)
-        print("✅ Xcode project updated: IPHONEOS_DEPLOYMENT_TARGET = 13.0")
+        print(f"✅ Xcode project updated: IPHONEOS_DEPLOYMENT_TARGET = {DEPLOYMENT_TARGET}")
     else:
-        print("ℹ️ Xcode project already has IPHONEOS_DEPLOYMENT_TARGET = 13.0")
+        print(f"ℹ️ Xcode project already has IPHONEOS_DEPLOYMENT_TARGET = {DEPLOYMENT_TARGET}")
 else:
     print("⚠️ Xcode project not found, skipping")
 

@@ -64,7 +64,7 @@ jobs:
           ls -la ios/App/Podfile 2>/dev/null && echo "✅ Podfile exists" || echo "❌ Podfile not found"
           ls -la ios/App/App.xcodeproj 2>/dev/null && echo "✅ Xcode project exists" || echo "❌ Xcode project not found"
       
-      - name: Update iOS deployment target to 13.0
+      - name: Update iOS deployment target to 14.0
         run: |
           python3 scripts/update-ios-deployment-target.py || {
             echo "⚠️ Script failed, checking if files exist..."

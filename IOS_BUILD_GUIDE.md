@@ -313,32 +313,32 @@ npx cap sync ios
 ### Error: "CocoaPods could not find compatible versions - required a higher minimum deployment target"
 
 **Solusi:**
-Update minimum iOS deployment target ke 13.0 atau lebih tinggi:
+Update minimum iOS deployment target ke 14.0 atau lebih tinggi:
 
 **Di Podfile (`ios/App/Podfile`):**
 ```ruby
-platform :ios, '13.0'
+platform :ios, '14.0'
 ```
 
 **Di Xcode project:**
 1. Buka `ios/App/App.xcodeproj` di Xcode
 2. Pilih project > Target "App"
 3. Tab **General** > **Deployment Info**
-4. Set **iOS Deployment Target** ke **13.0** atau lebih tinggi
+4. Set **iOS Deployment Target** ke **14.0** atau lebih tinggi
 
 **Atau via command line:**
 ```bash
 # Update Podfile
-sed -i.bak "s/platform :ios, '[^']*'/platform :ios, '13.0'/" ios/App/Podfile
+sed -i.bak "s/platform :ios, '[^']*'/platform :ios, '14.0'/" ios/App/Podfile
 
 # Update Xcode project
-sed -i.bak "s/IPHONEOS_DEPLOYMENT_TARGET = [^;]*/IPHONEOS_DEPLOYMENT_TARGET = 13.0/g" ios/App/App.xcodeproj/project.pbxproj
+sed -i.bak "s/IPHONEOS_DEPLOYMENT_TARGET = [^;]*/IPHONEOS_DEPLOYMENT_TARGET = 14.0/g" ios/App/App.xcodeproj/project.pbxproj
 
 # Sync lagi
 npx cap sync ios
 ```
 
-**Note:** Capacitor 7+ membutuhkan minimum iOS 13.0.
+**Note:** Capacitor 7.4+ membutuhkan minimum iOS 14.0.
 
 ---
 
