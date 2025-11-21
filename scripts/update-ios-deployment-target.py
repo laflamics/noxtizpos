@@ -32,6 +32,13 @@ if os.path.exists(podfile_path):
             sys.exit(1)
 else:
     print("❌ ERROR: Podfile not found after sync!")
+    print(f"Current directory: {os.getcwd()}")
+    print(f"Looking for: {os.path.abspath(podfile_path)}")
+    if os.path.exists("ios"):
+        print("ios/ directory exists")
+        if os.path.exists("ios/App"):
+            print("ios/App/ directory exists")
+            print(f"Files in ios/App/: {os.listdir('ios/App')}")
     sys.exit(1)
 
 # Update Xcode project
