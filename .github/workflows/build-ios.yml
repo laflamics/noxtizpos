@@ -49,6 +49,29 @@ jobs:
           fi
         continue-on-error: true
       
+      - name: Update iOS deployment target
+        run: |
+          # Update Podfile if exists
+          if [ -f "ios/App/Podfile" ]; then
+            # Update minimum iOS version to 13.0 (required by Capacitor 7+)
+            if grep -q "^platform :ios" ios/App/Podfile; then
+              sed -i.bak "s/^platform :ios, '[^']*'/platform :ios, '13.0'/" ios/App/Podfile
+            else
+              sed -i.bak "1i\\
+platform :ios, '13.0'
+" ios/App/Podfile
+            fi
+            echo "✅ Podfile updated:"
+            grep "platform :ios" ios/App/Podfile
+          fi
+          
+          # Update Xcode project deployment target if project exists
+          if [ -f "ios/App/App.xcodeproj/project.pbxproj" ]; then
+            # Update IPHONEOS_DEPLOYMENT_TARGET to 13.0
+            sed -i.bak "s/IPHONEOS_DEPLOYMENT_TARGET = [^;]*/IPHONEOS_DEPLOYMENT_TARGET = 13.0/g" ios/App/App.xcodeproj/project.pbxproj
+            echo "✅ Xcode project deployment target updated to 13.0"
+          fi
+      
       - name: Sync iOS
         run: npx cap sync ios
       
