@@ -26,6 +26,23 @@ export default function POS() {
   const [lastOrder, setLastOrder] = useState<any>(null);
   const [showShareModal, setShowShareModal] = useState(false);
 
+  // Helper function untuk handle save PDF
+  const handleSavePDFPOS = () => {
+    if (!lastOrder) return;
+    const pdfContent = generatePDFContent(lastOrder, settings);
+    const blob = new Blob([pdfContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `struk-${lastOrder.id}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setShowShareModal(false);
+  };
+  
+
   useEffect(() => {
     const checkDesktop = () => {
       setIsDesktop(window.innerWidth >= 1024);
@@ -1159,145 +1176,318 @@ export default function POS() {
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     className="btn btn-secondary"
-                    onClick={() => {
-                      const receiptContent = generateReceiptContent(lastOrder, settings);
-                      const blob = new Blob([receiptContent], { type: 'text/plain' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `struk-${lastOrder.id}-${new Date().toISOString().split('T')[0]}.txt`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
+                    onClick={async () => {
+                      // Share sesuai preview yang ditampilkan - pakai native Android share
+                      if (navigator.share) {
+                        try {
+                          // Ambil HTML dari preview
+                          const receiptElement = document.getElementById('receipt-content');
+                          if (receiptElement) {
+                            // Convert HTML to text untuk share
+                            const receiptText = receiptElement.innerText || receiptElement.textContent || '';
+                            
+                            // Coba share sebagai file HTML dulu
+                            if (navigator.canShare) {
+                              const htmlContent = receiptElement.outerHTML;
+                              const blob = new Blob([htmlContent], { type: 'text/html' });
+                              const file = new File([blob], `struk-${lastOrder.id}.html`, { type: 'text/html' });
+                              
+                              if (navigator.canShare({ files: [file] })) {
+                                await navigator.share({
+                                  title: 'Struk Pembayaran',
+                                  text: 'Struk sesuai preview',
+                                  files: [file],
+                                });
+                                return;
+                              }
+                            }
+                            
+                            // Fallback: share sebagai text
+                            await navigator.share({
+                              title: 'Struk Pembayaran',
+                              text: receiptText,
+                            });
+                          }
+                        } catch (error: any) {
+                          if (error.name !== 'AbortError') {
+                            console.error('Share failed:', error);
+                            // Fallback: download HTML
+                            const receiptElement = document.getElementById('receipt-content');
+                            if (receiptElement) {
+                              const htmlContent = receiptElement.outerHTML;
+                              const blob = new Blob([htmlContent], { type: 'text/html' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `struk-${lastOrder.id}.html`;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              URL.revokeObjectURL(url);
+                            }
+                          }
+                        }
+                      } else {
+                        // Fallback: download HTML
+                        const receiptElement = document.getElementById('receipt-content');
+                        if (receiptElement) {
+                          const htmlContent = receiptElement.outerHTML;
+                          const blob = new Blob([htmlContent], { type: 'text/html' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `struk-${lastOrder.id}.html`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+                        }
+                      }
+                    }}
+                    onTouchEnd={async (e) => {
+                      e.preventDefault();
+                      // Share sesuai preview yang ditampilkan
+                      if (navigator.share) {
+                        try {
+                          const receiptElement = document.getElementById('receipt-content');
+                          if (receiptElement) {
+                            const receiptText = receiptElement.innerText || receiptElement.textContent || '';
+                            
+                            if (navigator.canShare) {
+                              const htmlContent = receiptElement.outerHTML;
+                              const blob = new Blob([htmlContent], { type: 'text/html' });
+                              const file = new File([blob], `struk-${lastOrder.id}.html`, { type: 'text/html' });
+                              
+                              if (navigator.canShare({ files: [file] })) {
+                                await navigator.share({
+                                  title: 'Struk Pembayaran',
+                                  text: 'Struk sesuai preview',
+                                  files: [file],
+                                });
+                                return;
+                              }
+                            }
+                            
+                            await navigator.share({
+                              title: 'Struk Pembayaran',
+                              text: receiptText,
+                            });
+                          }
+                        } catch (error: any) {
+                          if (error.name !== 'AbortError') {
+                            const receiptElement = document.getElementById('receipt-content');
+                            if (receiptElement) {
+                              const htmlContent = receiptElement.outerHTML;
+                              const blob = new Blob([htmlContent], { type: 'text/html' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `struk-${lastOrder.id}.html`;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              URL.revokeObjectURL(url);
+                            }
+                          }
+                        }
+                      } else {
+                        const receiptElement = document.getElementById('receipt-content');
+                        if (receiptElement) {
+                          const htmlContent = receiptElement.outerHTML;
+                          const blob = new Blob([htmlContent], { type: 'text/html' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `struk-${lastOrder.id}.html`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+                        }
+                      }
                     }}
                     style={{ padding: '8px', minWidth: 'auto' }}
-                    title="Download"
+                    title="Simpan/Share sesuai Preview"
                   >
                     <Download size={18} />
                   </button>
                   <button
                     className="btn btn-secondary"
                     onClick={async () => {
-                      // Generate plain text receipt (printer-friendly, no ESC/POS commands)
-                      const receiptContent = generateReceiptContent(lastOrder, settings);
-                      // Use Web Share API - Android native share sheet with file
-                      if (navigator.share && navigator.canShare) {
+                      // Share native Android sesuai preview
+                      const receiptElement = document.getElementById('receipt-content');
+                      if (receiptElement && navigator.share) {
                         try {
-                          // Create file for sharing - plain text format
-                          const blob = new Blob([receiptContent], { type: 'text/plain' });
-                          const file = new File([blob], `struk-${lastOrder.id}.txt`, { type: 'text/plain' });
+                          const receiptText = receiptElement.innerText || receiptElement.textContent || '';
                           
-                          // Check if can share file
-                          if (navigator.canShare({ files: [file] })) {
-                            // Share as file - Android will show native share sheet with file
-                            // Printer thermal apps will appear in the share sheet
-                            await navigator.share({
-                              title: 'Struk Pembayaran',
-                              text: 'Struk untuk printer thermal',
-                              files: [file],
-                            });
-                          } else {
-                            // Fallback to text share if file sharing not supported
-                            await navigator.share({
-                              title: 'Struk Pembayaran',
-                              text: receiptContent,
-                            });
-                          }
-                        } catch (error: any) {
-                          // User cancelled share (error.name === 'AbortError') - do nothing
-                          if (error.name !== 'AbortError') {
-                            console.error('Share failed:', error);
-                            // If share failed, try text only
-                            try {
+                          // Coba share sebagai file HTML
+                          if (navigator.canShare) {
+                            const htmlContent = receiptElement.outerHTML;
+                            const blob = new Blob([htmlContent], { type: 'text/html' });
+                            const file = new File([blob], `struk-${lastOrder.id}.html`, { type: 'text/html' });
+                            
+                            if (navigator.canShare({ files: [file] })) {
                               await navigator.share({
                                 title: 'Struk Pembayaran',
-                                text: receiptContent,
+                                text: 'Struk sesuai preview',
+                                files: [file],
                               });
-                            } catch (textError: any) {
-                              if (textError.name !== 'AbortError') {
-                                // Fallback: open share modal
-                                setShowShareModal(true);
-                              }
+                              return;
                             }
                           }
-                        }
-                      } else if (navigator.share) {
-                        // navigator.share available but canShare not available - try text share
-                        try {
+                          
+                          // Fallback: share sebagai text
                           await navigator.share({
                             title: 'Struk Pembayaran',
-                            text: receiptContent,
+                            text: receiptText,
                           });
                         } catch (error: any) {
                           if (error.name !== 'AbortError') {
-                            // Fallback: open share modal
-                            setShowShareModal(true);
+                            console.error('Share failed:', error);
                           }
                         }
-                      } else {
-                        // Fallback: open share modal if Web Share API not available
-                        setShowShareModal(true);
+                      }
+                    }}
+                    onTouchEnd={async (e) => {
+                      e.preventDefault();
+                      const receiptElement = document.getElementById('receipt-content');
+                      if (receiptElement && navigator.share) {
+                        try {
+                          const receiptText = receiptElement.innerText || receiptElement.textContent || '';
+                          
+                          if (navigator.canShare) {
+                            const htmlContent = receiptElement.outerHTML;
+                            const blob = new Blob([htmlContent], { type: 'text/html' });
+                            const file = new File([blob], `struk-${lastOrder.id}.html`, { type: 'text/html' });
+                            
+                            if (navigator.canShare({ files: [file] })) {
+                              await navigator.share({
+                                title: 'Struk Pembayaran',
+                                text: 'Struk sesuai preview',
+                                files: [file],
+                              });
+                              return;
+                            }
+                          }
+                          
+                          await navigator.share({
+                            title: 'Struk Pembayaran',
+                            text: receiptText,
+                          });
+                        } catch (error: any) {
+                          if (error.name !== 'AbortError') {
+                            console.error('Share failed:', error);
+                          }
+                        }
                       }
                     }}
                     style={{ padding: '8px', minWidth: 'auto' }}
-                    title="Share ke Printer"
+                    title="Share Native Android"
                   >
                     <Share2 size={18} />
                   </button>
                   <button
                     className="btn btn-secondary"
                     onClick={async () => {
-                      // Try Bluetooth printer first (Android)
+                      // Coba Bluetooth printer dulu (untuk thermal printer)
                       if ('bluetooth' in navigator) {
                         try {
                           await printToBluetoothPrinter(lastOrder, settings, notify);
                           return;
                         } catch (error: any) {
-                          console.log('Bluetooth print failed, trying fallback:', error);
-                          // Continue to fallback
+                          console.log('Bluetooth print failed, trying HTML print:', error);
+                          // Continue to HTML print
                         }
                       }
                       
-                      // Fallback: Check if print is available (may not work on mobile)
-                      if (typeof window.print === 'function') {
-                        try {
+                      // Print sesuai preview HTML yang ditampilkan
+                      const receiptElement = document.getElementById('receipt-content');
+                      if (receiptElement) {
+                        const printWindow = window.open('', '_blank');
+                        if (printWindow) {
+                          printWindow.document.write(`
+                            <!DOCTYPE html>
+                            <html>
+                              <head>
+                                <title>Struk ${lastOrder.id}</title>
+                                <style>
+                                  body { margin: 0; padding: 20px; font-family: monospace; }
+                                  @media print {
+                                    body { padding: 0; }
+                                  }
+                                </style>
+                              </head>
+                              <body>
+                                ${receiptElement.outerHTML}
+                              </body>
+                            </html>
+                          `);
+                          printWindow.document.close();
+                          printWindow.onload = () => {
+                            printWindow.print();
+                          };
+                        } else {
+                          // Fallback: print langsung
                           window.print();
-                        } catch (e) {
-                          // Fallback: download as PDF text format
-                          const pdfContent = generatePDFContent(lastOrder, settings);
-                          const blob = new Blob([pdfContent], { type: 'text/plain' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `struk-${lastOrder.id}.pdf`;
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
-                          URL.revokeObjectURL(url);
                         }
-                      } else {
-                        // Fallback for Android: download as PDF text format
-                        const pdfContent = generatePDFContent(lastOrder, settings);
-                        const blob = new Blob([pdfContent], { type: 'text/plain' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `struk-${lastOrder.id}.pdf`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
+                      }
+                    }}
+                    onTouchEnd={async (e) => {
+                      e.preventDefault();
+                      // Coba Bluetooth printer dulu (untuk thermal printer)
+                      if ('bluetooth' in navigator) {
+                        try {
+                          await printToBluetoothPrinter(lastOrder, settings, notify);
+                          return;
+                        } catch (error: any) {
+                          console.log('Bluetooth print failed, trying HTML print:', error);
+                          // Continue to HTML print
+                        }
+                      }
+                      
+                      // Print sesuai preview HTML yang ditampilkan
+                      const receiptElement = document.getElementById('receipt-content');
+                      if (receiptElement) {
+                        const printWindow = window.open('', '_blank');
+                        if (printWindow) {
+                          printWindow.document.write(`
+                            <!DOCTYPE html>
+                            <html>
+                              <head>
+                                <title>Struk ${lastOrder.id}</title>
+                                <style>
+                                  body { margin: 0; padding: 20px; font-family: monospace; }
+                                  @media print {
+                                    body { padding: 0; }
+                                  }
+                                </style>
+                              </head>
+                              <body>
+                                ${receiptElement.outerHTML}
+                              </body>
+                            </html>
+                          `);
+                          printWindow.document.close();
+                          printWindow.onload = () => {
+                            printWindow.print();
+                          };
+                        } else {
+                          window.print();
+                        }
                       }
                     }}
                     style={{ padding: '8px', minWidth: 'auto' }}
-                    title="Print ke Bluetooth Printer"
+                    title="Print (Bluetooth Thermal atau Preview HTML)"
                   >
                     <Printer size={18} />
                   </button>
                   <button
                     className="btn btn-secondary"
                     onClick={() => setShowReceiptModal(false)}
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      setShowReceiptModal(false);
+                    }}
                     style={{ padding: '8px', minWidth: 'auto' }}
                   >
                     <X size={20} />
@@ -1659,19 +1849,10 @@ export default function POS() {
 
                   <button
                     className="btn btn-secondary"
-                    onClick={() => {
-                      // Create PDF-like text format
-                      const pdfContent = generatePDFContent(lastOrder, settings);
-                      const blob = new Blob([pdfContent], { type: 'text/plain' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `struk-${lastOrder.id}.pdf`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
-                      setShowShareModal(false);
+                    onClick={handleSavePDFPOS}
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      handleSavePDFPOS();
                     }}
                     style={{ justifyContent: 'flex-start', padding: '16px' }}
                   >

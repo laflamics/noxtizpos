@@ -1,0 +1,78 @@
+name: Build iOS
+
+on:
+  workflow_dispatch:  # Manual trigger
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'capacitor.config.ts'
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-ios:
+    runs-on: macos-latest  # Mac runner untuk build iOS
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build Electron
+        run: npm run build:electron
+      
+      - name: Build web app
+        run: npm run build
+      
+      - name: Clean dist folder
+        run: npm run build:ios:clean
+      
+      - name: Setup CocoaPods
+        run: |
+          sudo gem install cocoapods
+          pod --version
+      
+      - name: Add iOS platform (if not exists)
+        run: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+        continue-on-error: true
+      
+      - name: Sync iOS
+        run: npx cap sync ios
+      
+      - name: Build iOS (Xcode)
+        run: |
+          cd ios/App
+          xcodebuild -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/App.xcarchive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+        continue-on-error: true
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-build
+          path: |
+            ios/App/build/App.xcarchive
+            ios/App/build/Debug-iphonesimulator
+          retention-days: 7
+

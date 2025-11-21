@@ -709,11 +709,25 @@ export default function Dashboard() {
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <LicenseCountdownBadge />
-            <button className="btn btn-secondary" onClick={handlePrint}>
+            <button 
+              className="btn btn-secondary" 
+              onClick={handlePrint}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                handlePrint();
+              }}
+            >
               <Printer size={18} />
               Print
             </button>
-            <button className="btn btn-secondary" onClick={handleSavePDF}>
+            <button 
+              className="btn btn-secondary" 
+              onClick={handleSavePDF}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                handleSavePDF();
+              }}
+            >
               <Download size={18} />
               Save PDF
             </button>

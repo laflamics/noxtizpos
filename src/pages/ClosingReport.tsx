@@ -408,11 +408,25 @@ export default function ClosingReport() {
             </div>
           )}
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-secondary" onClick={handleDownload}>
+            <button 
+              className="btn btn-secondary" 
+              onClick={handleDownload}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                handleDownload();
+              }}
+            >
               <Download size={18} />
               Download
             </button>
-            <button className="btn btn-secondary" onClick={handlePrint}>
+            <button 
+              className="btn btn-secondary" 
+              onClick={handlePrint}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                handlePrint();
+              }}
+            >
               <Printer size={18} />
               Print
             </button>

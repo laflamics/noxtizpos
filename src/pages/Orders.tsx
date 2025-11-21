@@ -13,6 +13,57 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState('');
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  
+  // Helper function untuk handle print
+  const handlePrintOrder = () => {
+    if (!selectedOrder) return;
+    // Check if print is available (may not work on mobile/Android)
+    if (typeof window.print === 'function') {
+      try {
+        window.print();
+      } catch (e) {
+        // Fallback: download as PDF text format
+        const pdfContent = generatePDFContent(selectedOrder, settings);
+        const blob = new Blob([pdfContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `struk-${selectedOrder.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } else {
+      // Fallback for Android: download as PDF text format
+      const pdfContent = generatePDFContent(selectedOrder, settings);
+      const blob = new Blob([pdfContent], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `struk-${selectedOrder.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  };
+  
+  // Helper function untuk handle save PDF
+  const handleSavePDFOrder = () => {
+    if (!selectedOrder) return;
+    const pdfContent = generatePDFContent(selectedOrder, settings);
+    const blob = new Blob([pdfContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `struk-${selectedOrder.id}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setShowShareModal(false);
+  };
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
 
@@ -263,68 +314,62 @@ export default function Orders() {
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     className="btn btn-secondary"
-                    onClick={async () => {
+                    {...createAsyncTouchHandler(async () => {
                       // Generate plain text receipt (printer-friendly, no ESC/POS commands)
                       const receiptContent = generateReceiptContent(selectedOrder, settings);
-                      // Use Web Share API - Android native share sheet with file
-                      if (navigator.share && navigator.canShare) {
+                      
+                      // Langsung pakai native Android share sheet
+                      if (navigator.share) {
                         try {
-                          // Create file for sharing - plain text format
-                          const blob = new Blob([receiptContent], { type: 'text/plain' });
-                          const file = new File([blob], `struk-${selectedOrder.id}.txt`, { type: 'text/plain' });
-                          
-                          // Check if can share file
-                          if (navigator.canShare({ files: [file] })) {
-                            // Share as file - Android will show native share sheet with file
-                            // Printer thermal apps will appear in the share sheet
-                            await navigator.share({
-                              title: 'Struk Pembayaran',
-                              text: 'Struk untuk printer thermal',
-                              files: [file],
-                            });
-                          } else {
-                            // Fallback to text share if file sharing not supported
-                            await navigator.share({
-                              title: 'Struk Pembayaran',
-                              text: receiptContent,
-                            });
-                          }
-                        } catch (error: any) {
-                          // User cancelled share (error.name === 'AbortError') - do nothing
-                          if (error.name !== 'AbortError') {
-                            console.error('Share failed:', error);
-                            // If share failed, try text only
-                            try {
+                          // Coba share sebagai file dulu (lebih baik untuk printer apps)
+                          if (navigator.canShare) {
+                            const blob = new Blob([receiptContent], { type: 'text/plain' });
+                            const file = new File([blob], `struk-${selectedOrder.id}.txt`, { type: 'text/plain' });
+                            
+                            if (navigator.canShare({ files: [file] })) {
                               await navigator.share({
                                 title: 'Struk Pembayaran',
-                                text: receiptContent,
+                                text: 'Struk untuk printer thermal',
+                                files: [file],
                               });
-                            } catch (textError: any) {
-                              if (textError.name !== 'AbortError') {
-                                // Fallback: open share modal
-                                setShowShareModal(true);
-                              }
+                              return;
                             }
                           }
-                        }
-                      } else if (navigator.share) {
-                        // navigator.share available but canShare not available - try text share
-                        try {
+                          
+                          // Fallback ke text share
                           await navigator.share({
                             title: 'Struk Pembayaran',
                             text: receiptContent,
                           });
                         } catch (error: any) {
+                          // User cancelled (AbortError) - do nothing
                           if (error.name !== 'AbortError') {
-                            // Fallback: open share modal
-                            setShowShareModal(true);
+                            console.error('Share failed:', error);
+                            // Kalau share gagal, download file sebagai fallback
+                            const blob = new Blob([receiptContent], { type: 'text/plain' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `struk-${selectedOrder.id}.txt`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
                           }
                         }
                       } else {
-                        // Fallback: open share modal if Web Share API not available
-                        setShowShareModal(true);
+                        // Fallback: download file kalau Web Share API tidak tersedia
+                        const blob = new Blob([receiptContent], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `struk-${selectedOrder.id}.txt`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
                       }
-                    }}
+                    })}
                     style={{ padding: '8px', minWidth: 'auto' }}
                     title="Share ke Printer"
                   >
@@ -429,38 +474,11 @@ export default function Orders() {
               <div style={{ display: 'flex', gap: '12px', marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
                 <button
                   className="btn btn-secondary"
-                    onClick={() => {
-                      // Check if print is available (may not work on mobile/Android)
-                      if (typeof window.print === 'function') {
-                        try {
-                          window.print();
-                        } catch (e) {
-                          // Fallback: download as PDF text format
-                          const pdfContent = generatePDFContent(selectedOrder, settings);
-                          const blob = new Blob([pdfContent], { type: 'text/plain' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = `struk-${selectedOrder.id}.pdf`;
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
-                          URL.revokeObjectURL(url);
-                        }
-                      } else {
-                        // Fallback for Android: download as PDF text format
-                        const pdfContent = generatePDFContent(selectedOrder, settings);
-                        const blob = new Blob([pdfContent], { type: 'text/plain' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `struk-${selectedOrder.id}.pdf`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                      }
-                    }}
+                  onClick={handlePrintOrder}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    handlePrintOrder();
+                  }}
                   style={{ flex: 1 }}
                 >
                   <Printer size={18} />
@@ -679,26 +697,18 @@ export default function Orders() {
                     Simpan Format POS80 (Thermal)
                   </button>
 
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => {
-                      const pdfContent = generatePDFContent(selectedOrder, settings);
-                      const blob = new Blob([pdfContent], { type: 'text/plain' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `struk-${selectedOrder.id}.pdf`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
-                      setShowShareModal(false);
-                    }}
-                    style={{ justifyContent: 'flex-start', padding: '16px' }}
-                  >
-                    <FileText size={20} />
-                    Simpan sebagai PDF (Text Format)
-                  </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleSavePDFOrder}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    handleSavePDFOrder();
+                  }}
+                  style={{ justifyContent: 'flex-start', padding: '16px' }}
+                >
+                  <FileText size={20} />
+                  Simpan sebagai PDF (Text Format)
+                </button>
                 </div>
               </div>
             </motion.div>
